@@ -25,15 +25,15 @@ class TestAutoBackend:
             ('baichuan-inc/Baichuan2-13B-Chat', True, False),
             ('internlm/internlm-chat-7b', True, True),
             ('internlm/internlm2-chat-7b', True, True),
-            ('internlm/internlm-xcomposer2-7b', False, False),
-            ('internlm/internlm-xcomposer-7b', False, True),
+            ('internlm/internlm-xcomposer2-7b', False, True),
+            ('internlm/internlm-xcomposer-7b', False, False),
             ('THUDM/chatglm2-6b', True, False),
             ('THUDM/chatglm3-6b', True, False),
             ('deepseek-ai/deepseek-moe-16b-chat', True, False),
             ('tiiuae/falcon-7b-instruct', True, False),
             ('01-ai/Yi-34B-Chat', True, True),
             ('codellama/CodeLlama-7b-Instruct-hf', True, True),
-            ('mistralai/Mistral-7B-Instruct-v0.1', True, False),
+            ('mistralai/Mistral-7B-Instruct-v0.1', True, True),
             ('mistralai/Mixtral-8x7B-Instruct-v0.1', True, False),
             ('Qwen/Qwen-7B-Chat', True, True),
             ('Qwen/Qwen-VL-Chat', False, True),
@@ -75,10 +75,10 @@ class TestAutoBackend:
             'internlm/internlm-chat-7b')) is TurbomindEngineConfig
         assert type(
             autoget_backend_config(
-                'mistralai/Mistral-7B-Instruct-v0.1')) is PytorchEngineConfig
+                'mistralai/Mixtral-8x7B-Instruct-v0.1')) is PytorchEngineConfig
         backend_config = TurbomindEngineConfig(max_batch_size=64,
                                                cache_block_seq_len=128)
-        config = autoget_backend_config('mistralai/Mistral-7B-Instruct-v0.1',
+        config = autoget_backend_config('mistralai/Mixtral-8x7B-Instruct-v0.1',
                                         backend_config)
         assert type(config) is PytorchEngineConfig
         assert config.max_batch_size == 64

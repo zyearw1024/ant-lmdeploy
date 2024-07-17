@@ -1,3 +1,4 @@
+// Copyright (c) OpenMMLab. All rights reserved.
 
 #include "array_ops.h"
 #include "reference.h"
@@ -21,7 +22,8 @@ __global__ void createCausalMasks(T* mask, const int* q_lens, const int* k_lens,
 
 // [B, H, S, D]
 template<class T>
-__global__ void applyRotaryEmbedding(T* k_cache, int max_k_len, int head_num, int head_dim, float rope_base)
+__global__ void
+applyRotaryEmbedding(T* k_cache, int max_k_len, int head_num, int head_dim, float rope_base, int rope_dim)
 {
     const int    ti = blockIdx.x;
     const size_t hi = blockIdx.y;
@@ -38,7 +40,7 @@ __global__ void applyRotaryEmbedding(T* k_cache, int max_k_len, int head_num, in
 
         Load(vec_K, &k_cache[idx]);
 
-        RotaryEmbedding<kVecSize> rope(rope_base, head_dim, history + ti, {d, 0});
+        RotaryEmbedding<kVecSize> rope(rope_base, rope_dim, history + ti, {d, 0});
 
         rope.apply(vec_K);
 
@@ -47,38 +49,53 @@ __global__ void applyRotaryEmbedding(T* k_cache, int max_k_len, int head_num, in
 }
 
 template<class T>
-void invokeApplyRotaryEmbedding(
-    T* k_cache, int max_k_len, int head_num, int head_dim, float rope_base, int batch_size, cudaStream_t stream)
+void invokeApplyRotaryEmbedding(T*           k_cache,
+                                int          max_k_len,
+                                int          head_num,
+                                int          head_dim,
+                                float        rope_base,
+                                int          rope_dim,
+                                int          batch_size,
+                                cudaStream_t stream)
 {
     int  threads = 128;
     dim3 blocks(max_k_len, head_num, batch_size);
 
-    applyRotaryEmbedding<<<blocks, threads, 0, stream>>>(k_cache, max_k_len, head_num, head_dim, rope_base);
+    applyRotaryEmbedding<<<blocks, threads, 0, stream>>>(k_cache, max_k_len, head_num, head_dim, rope_base, rope_dim);
 }
 
-template void invokeApplyRotaryEmbedding(
-    half* k_cache, int max_k_len, int head_num, int head_dim, float rope_base, int batch_size, cudaStream_t stream);
+template void invokeApplyRotaryEmbedding(half*        k_cache,
+                                         int          max_k_len,
+                                         int          head_num,
+                                         int          head_dim,
+                                         float        rope_base,
+                                         int          rope_dim,
+                                         int          batch_size,
+                                         cudaStream_t stream);
 #if ENABLE_BF16
 template void invokeApplyRotaryEmbedding(nv_bfloat16* k_cache,
                                          int          max_k_len,
                                          int          head_num,
                                          int          head_dim,
                                          float        rope_base,
+                                         int          rope_dim,
                                          int          batch_size,
                                          cudaStream_t stream);
 #endif
 
 template<class T>
-__global__ void processQKV(T*       q_out,    // [B, H, s, D]
-                           T*       k_cache,  // [B, H, S, D]
-                           T*       v_cache,  // [B, H, S, D]
-                           const T* qkv,      // [B, s, H, D]
+__global__ void processQKV(T*       q_out,     // [B, H, s, D]
+                           T*       k_cache,   // [B, H, S, D]
+                           T*       v_cache,   // [B, H, S, D]
+                           const T* qkv,       // [B, s, H, D]
+                           const T* qkv_bias,  // [Q; K; V]
                            int      max_q_len,
                            int      max_k_len,
                            int      head_num,
                            int      head_dim,
                            int      kv_head_num,
-                           float    rope_theta)
+                           float    rope_theta,
+                           int      rope_dim)
 {
     const int    ti = blockIdx.x;
     const size_t hi = blockIdx.y;
@@ -92,16 +109,28 @@ __global__ void processQKV(T*       q_out,    // [B, H, s, D]
     auto k = q + head_num * head_dim;
     auto v = k + kv_head_num * head_dim;
 
+    auto q_bias = qkv_bias ? qkv_bias + hi * head_dim : nullptr;
+    auto k_bias = qkv_bias ? q_bias + head_num * head_dim : nullptr;
+    auto v_bias = qkv_bias ? k_bias + kv_head_num * head_dim : nullptr;
+
     constexpr int kVecSize = 2;
+
+    using namespace ops;
 
     for (int d = threadIdx.x * kVecSize; d < head_dim; d += blockDim.x * kVecSize) {
         const auto         idx = bi * head_num * max_q_len * head_dim + hi * max_q_len * head_dim + ti * head_dim + d;
         Array<T, kVecSize> vec;
         Ldg(vec, &q[hi * head_dim + d]);
+        if (qkv_bias) {
+            Array<T, kVecSize> bias;
+            Load(bias, &q_bias[d]);
+            vec = vec + bias;
+        }
         if (rope_theta) {
-            RotaryEmbedding<kVecSize> rope(rope_theta, head_dim, history + ti, {d, 0});
+            RotaryEmbedding<kVecSize> rope(rope_theta, rope_dim, history + ti, {d, 0});
             rope.apply(vec);
         }
+
         Store(&q_out[idx], vec);
     }
 
@@ -116,8 +145,16 @@ __global__ void processQKV(T*       q_out,    // [B, H, s, D]
         Array<T, kVecSize> vec_V;
         Ldg(vec_K, &k[hi * head_dim + d]);
         Ldg(vec_V, &v[hi * head_dim + d]);
+        if (qkv_bias) {
+            Array<T, kVecSize> bias_K;
+            Array<T, kVecSize> bias_V;
+            Load(bias_K, &k_bias[d]);
+            Load(bias_V, &v_bias[d]);
+            vec_K = vec_K + bias_K;
+            vec_V = vec_V + bias_V;
+        }
         if (rope_theta) {
-            RotaryEmbedding<kVecSize> rope(rope_theta, head_dim, history + ti, {d, 0});
+            RotaryEmbedding<kVecSize> rope(rope_theta, rope_dim, history + ti, {d, 0});
             rope.apply(vec_K);
         }
         Store(&k_cache[idx], vec_K);
@@ -175,7 +212,8 @@ void Reference<T>::Reshape(
 }
 
 template<class T>
-void Reference<T>::Execute(T* output, T* k_cache, T* v_cache, const T* qkv)
+void Reference<T>::Execute(
+    T* output, T* k_cache, T* v_cache, const T* qkv, const T* qkv_bias, float rope_base, int rope_dim)
 {
     {
         int  threads = 128;
@@ -186,17 +224,21 @@ void Reference<T>::Execute(T* output, T* k_cache, T* v_cache, const T* qkv)
                                                     k_cache,
                                                     v_cache,
                                                     qkv,
+                                                    qkv_bias,
                                                     max_q_len_,
                                                     max_k_len_,
                                                     head_num_,
                                                     head_dim_,
                                                     kv_head_num_,
-                                                    10000.f);
+                                                    rope_base,
+                                                    rope_dim);
 
         cudaDeviceSynchronize();
     }
 
     if (type_ == kUNFUSED) {
+
+        const cudaDataType data_type = std::is_same_v<T, half> ? CUDA_R_16F : CUDA_R_16BF;
 
         float alpha = 1.f;
         float beta  = 0.f;
@@ -208,11 +250,11 @@ void Reference<T>::Execute(T* output, T* k_cache, T* v_cache, const T* qkv)
                                    head_dim_,                // k
                                    &alpha,                   // alpha
                                    k_cache,                  // A
-                                   CUDA_R_16F,               // A type
+                                   data_type,                // A type
                                    head_dim_,                // lda
                                    max_k_len_ * head_dim_,   // strideA
                                    q_.data().get(),          // B
-                                   CUDA_R_16F,               // B type
+                                   data_type,                // B type
                                    head_dim_,                // ldb
                                    max_q_len_ * head_dim_,   // stride B
                                    &beta,                    // beta
@@ -243,16 +285,16 @@ void Reference<T>::Execute(T* output, T* k_cache, T* v_cache, const T* qkv)
                                    max_k_len_,               // k
                                    &alpha,                   // alpha
                                    v_cache,                  // A
-                                   CUDA_R_16F,               // A type
+                                   data_type,                // A type
                                    head_dim_,                // lda
                                    max_k_len_ * head_dim_,   // strideA
                                    pr_.data().get(),         // B
-                                   CUDA_R_16F,               // B type
+                                   data_type,                // B type
                                    max_k_len_,               // ldb
                                    max_q_len_ * max_k_len_,  // stride B
                                    &beta,                    // beta
                                    out_.data().get(),        // C [b, h, q, d]
-                                   CUDA_R_16F,               // C type
+                                   data_type,                // C type
                                    head_dim_,                // ldc
                                    max_q_len_ * head_dim_,   // stride C
                                    batch_size_ * head_num_,  // batch count

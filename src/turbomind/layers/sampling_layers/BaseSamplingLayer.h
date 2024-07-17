@@ -33,7 +33,7 @@ protected:
     size_t vocab_size_;
     size_t vocab_size_padded_;
 
-    int* repetition_penalty_workspace_;
+    int* repetition_penalty_workspace_ = nullptr;
 
     size_t sampling_workspace_size_;
     void*  sampling_workspace_ = nullptr;
@@ -50,6 +50,7 @@ protected:
     bool*  skip_decode_        = nullptr;
     bool   skip_any_           = false;
     int*   context_length_     = nullptr;
+    bool   skip_all_           = false;
 
     RepetitionPenaltyType repetition_penalty_type_ = RepetitionPenaltyType::None;
 

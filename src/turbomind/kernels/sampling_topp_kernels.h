@@ -58,6 +58,9 @@ void invokeBatchTopPSampling(void*           workspace,
                              float*          cum_log_probs,
                              float*          output_log_probs,
                              const T*        log_probs,
+                             float*          sampled_logprobs,
+                             uint32_t*       sampled_indexes,
+                             uint32_t*       sampled_nums,
                              const int*      id_vals,
                              int*            offset_buf,
                              int*            begin_offset_buf,
@@ -146,14 +149,5 @@ int topPPerSegment(const TopKPerSegmentContext& context,
                    size_t&                      temp_storage_bytes,
                    cudaStream_t                 stream);
 }  // namespace segmented_topp_impl
-
-void invokeComputeToppDecay(float*         runtime_top_p,
-                            const float*   runtime_initial_top_p,
-                            const int*     output_ids,
-                            const float*   top_p_decay,
-                            const float*   top_p_min,
-                            const int32_t* top_p_reset_ids,
-                            const int      local_batch_size,
-                            cudaStream_t   stream);
 
 }  // namespace turbomind

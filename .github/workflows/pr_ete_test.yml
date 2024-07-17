@@ -23,6 +23,7 @@ concurrency:
 env:
   HOST_PIP_CACHE_DIR: /nvme/github-actions/pip-cache
   HOST_LOCALTIME: /usr/share/zoneinfo/Asia/Shanghai
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 
 jobs:
@@ -33,12 +34,11 @@ jobs:
       REPORT_DIR: /nvme/qa_test_models/test-reports
     container:
       image: nvcr.io/nvidia/tritonserver:24.03-py3
-      options: "--gpus=all --ipc=host --user root -e PIP_CACHE_DIR=/root/.cache/pip"
+      options: "--gpus=all --ipc=host --user root -e PIP_CACHE_DIR=/root/.cache/pip --pull never"
       volumes:
         - /nvme/share_data/github-actions/pip-cache:/root/.cache/pip
         - /nvme/share_data/github-actions/packages:/root/packages
         - /nvme/qa_test_models:/nvme/qa_test_models
-        - /mnt/bigdisk/qa_test_models:/mnt/bigdisk/qa_test_models
         - /usr/share/zoneinfo/Asia/Shanghai:/etc/localtime:ro
     steps:
       - name: Setup systems
@@ -53,13 +53,15 @@ jobs:
         run: |
           python3 -m pip cache dir
           python3 -m pip install torch==2.1.0 torchvision==0.16.0
+          # the install packeage from. https://github.com/Dao-AILab/flash-attention/releases
+          python3 -m pip install /root/packages/flash_attn-2.5.8+cu122torch2.1cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
       - name: Build lmdeploy
         run: |
           python3 -m pip install cmake
           python3 -m pip install -r requirements/build.txt
-          sed -i 's/https:\/\/github.com\/NVIDIA\/cutlass.git/https:\/\/521github.com\/extdomains\/github.com\/NVIDIA\/cutlass.git/g' CMakeLists.txt
           mkdir build
           cd build
+          cp -r /nvme/qa_test_models/offline_pkg/_deps .
           cmake .. \
               -DCMAKE_BUILD_TYPE=RelWithDebInfo \
               -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
@@ -82,7 +84,7 @@ jobs:
           python3 -m pip list
           lmdeploy check_env
       - name: Test lmdeploy
-        run: CUDA_VISIBLE_DEVICES=5,6 pytest autotest -m pr_test -v -s --alluredir=allure-results --clean-alluredir
+        run: CUDA_VISIBLE_DEVICES=5,6 pytest autotest -m pr_test -x --alluredir=allure-results --clean-alluredir
       - name: Generate reports
         if: always()
         run: |

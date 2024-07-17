@@ -132,11 +132,9 @@ void BaseSamplingLayer<T>::setup(const size_t batch_size, const size_t beam_widt
                                           Tensor(MEMORY_CPU, TYPE_FP32, {1}, &default_temperature);
     if (temperature.size() == 1) {
         float tp = temperature.getVal<float>();
-        deviceFill(temperature_buf_, batch_size, tp, stream_);
         std::fill_n(temperature_, batch_size, tp);
     }
     else {
-        cudaAutoCpy(temperature_buf_, temperature.getPtr<float>(), batch_size, stream_);
         std::copy_n(temperature.getPtr<float>(), batch_size, temperature_);
     }
 
@@ -152,11 +150,9 @@ void BaseSamplingLayer<T>::setup(const size_t batch_size, const size_t beam_widt
                                         runtime_args->at("presence_penalty");
         if (repetition_penalty.size() == 1) {
             float rp = repetition_penalty.getVal<float>();
-            deviceFill(repetition_penalty_buf_, batch_size, rp, stream_);
             std::fill_n(repetition_penalty_, batch_size, rp);
         }
         else {
-            cudaAutoCpy(repetition_penalty_buf_, repetition_penalty.getPtr<float>(), batch_size, stream_);
             std::copy_n(repetition_penalty.getPtr<float>(), batch_size, repetition_penalty_);
         }
     }
@@ -174,14 +170,17 @@ void BaseSamplingLayer<T>::setup(const size_t batch_size, const size_t beam_widt
         for (int i = 0; i < batch_size; i++) {
             min_lengths_[i] = p1[i] + p2[i];
         }
-        cudaAutoCpy(min_lengths_buf_, min_lengths_, batch_size, stream_);
         std::copy_n(context_lengths.getPtr<int>(), batch_size, context_length_);
     }
     else {
         std::fill_n(min_lengths_, batch_size, 0);
-        deviceFill(min_lengths_buf_, batch_size, 0, stream_);
         std::fill_n(context_length_, batch_size, 0);
     }
+
+    cudaAutoCpy(temperature_buf_, temperature_, batch_size, stream_);
+    cudaAutoCpy(repetition_penalty_buf_, repetition_penalty_, batch_size, stream_);
+    cudaAutoCpy(min_lengths_buf_, min_lengths_, batch_size, stream_);
+    sync_check_cuda_error();
 }
 
 template<typename T>
@@ -261,6 +260,10 @@ void BaseSamplingLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_t
     const int max_input_length = input_tensors->at("max_input_length").getVal<int>();
     T*        logits           = input_tensors->at("logits").getPtr<T>();
 
+    if (skip_all_) {
+        return;
+    }
+
 #define ALL_OF(p_, sz_, dt_, v_) (std::all_of(p_, p_ + sz_, [&](dt_ b) { return b == v_; }))
 
     bool* skip_decode = skip_decode_ + ite * local_batch_size;
@@ -274,7 +277,7 @@ void BaseSamplingLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_t
         // meaning topk and topp layers will run simultaneously for a batch in the same step.
         // We copy the logits to an internal buffer, not affecting the other sampling layers.
         FT_CHECK(input_tensors->at("logits").size() == local_batch_size * vocab_size_padded_);
-        cudaD2Dcpy(runtime_logits_buf_, logits, input_tensors->at("logits").size());
+        cudaAutoCpy(runtime_logits_buf_, logits, input_tensors->at("logits").size(), stream_);
         logits = runtime_logits_buf_;
     }
 

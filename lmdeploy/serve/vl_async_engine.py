@@ -1,24 +1,31 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 
 from lmdeploy.serve.async_engine import AsyncEngine
+from lmdeploy.utils import get_logger
 from lmdeploy.vl.constants import IMAGE_DUMMY_TOKEN_INDEX, IMAGE_TOKEN
 from lmdeploy.vl.engine import ImageEncoder
 from lmdeploy.vl.templates import VLPromptType, get_vl_prompt_template
+
+logger = get_logger('lmdeploy')
 
 
 class VLAsyncEngine(AsyncEngine):
     """Visual Language Async inference engine."""
 
     def __init__(self, model_path: str, **kwargs) -> None:
+        vision_config = kwargs.pop('vision_config', None)
+        backend_config = kwargs.get('backend_config', None)
+        self.vl_encoder = ImageEncoder(model_path,
+                                       vision_config,
+                                       backend_config=backend_config)
         super().__init__(model_path, **kwargs)
         if self.model_name == 'base':
             raise RuntimeError(
                 'please specify chat template as guided in https://lmdeploy.readthedocs.io/en/latest/inference/vl_pipeline.html#set-chat-template'  # noqa: E501
             )
-        self.vl_encoder = ImageEncoder(model_path)
         self.vl_prompt_template = get_vl_prompt_template(
             model_path, self.chat_template, self.model_name)
 
@@ -36,8 +43,13 @@ class VLAsyncEngine(AsyncEngine):
             _prompts = prompts
         return _prompts
 
-    async def _get_prompt_input(self, prompt: Dict, do_preprocess: bool,
-                                sequence_start: bool, adapter_name: str):
+    async def _get_prompt_input(self,
+                                prompt: Dict,
+                                do_preprocess: bool,
+                                sequence_start: bool,
+                                adapter_name: str,
+                                tools: Optional[List[object]] = None,
+                                **kwargs):
         """get input_ids, embeddings and offsets."""
         if do_preprocess:
             decorated = self.vl_prompt_template.messages2prompt(
@@ -52,12 +64,24 @@ class VLAsyncEngine(AsyncEngine):
             images = await self.vl_prompt_template.async_collect_pil_images(
                 prompt)
             features = await self.vl_encoder.async_infer(images)
+
+            from lmdeploy.vl.templates import MiniCPMVTempateWrapper
+            if isinstance(self.vl_prompt_template, MiniCPMVTempateWrapper):
+                decorated, features = self.vl_prompt_template.update_image_token(  # noqa: E501
+                    decorated, features)
+                segs = decorated.split(IMAGE_TOKEN)
+
             features = [x.cpu().numpy() for x in features]
             input_ids = []
             begins = []
             ends = []
+            if len(segs) != len(features) + 1:
+                logger.error(
+                    f'the number of {IMAGE_TOKEN} is not equal '
+                    f'to input images, {len(segs) - 1} vs {len(features)}')
+                features = features[:len(segs) - 1]
             for i, seg in enumerate(segs):
-                if i > 0:
+                if i > 0 and i <= len(features):
                     image_dim = features[i - 1].shape[0]
                     begins.append(len(input_ids))
                     ends.append(begins[-1] + image_dim)
