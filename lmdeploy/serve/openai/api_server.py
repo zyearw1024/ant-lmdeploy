@@ -357,6 +357,7 @@ async def chat_completions_v1_qos(request: ChatCompletionRequestQos,
         prompt_tokens=final_res.input_token_len,
         completion_tokens=final_res.generate_token_len,
         total_tokens=total_tokens,
+        prefix_cached_tokens=final_res.prefix_cached_token_len
     )
     response = ChatCompletionResponse(
         id=request_id,
@@ -590,6 +591,7 @@ async def chat_completions_v1(request: ChatCompletionRequest,
         prompt_tokens=final_res.input_token_len,
         completion_tokens=final_res.generate_token_len,
         total_tokens=total_tokens,
+        prefix_cached_tokens=final_res.prefix_cached_token_len,
     )
     response = ChatCompletionResponse(
         id=request_id,
@@ -693,6 +695,7 @@ async def completions_v1_qos(request: CompletionRequestQos,
                         prompt_tokens=final_res.input_token_len,
                         completion_tokens=final_res.generate_token_len,
                         total_tokens=total_tokens,
+                        prefix_cached_tokens=final_res.prefix_cached_token_len,
                     )
                 response_json = create_stream_response_json(
                     index=0,
@@ -738,6 +741,7 @@ async def completions_v1_qos(request: CompletionRequestQos,
         usage.prompt_tokens += final_res.input_token_len
         usage.completion_tokens += final_res.generate_token_len
         usage.total_tokens += total_tokens
+        usage.prefix_cached_tokens = final_res.prefix_cached_token_len
 
     await asyncio.gather(
         *[_inner_call(i, generators[i]) for i in range(len(generators))])
@@ -882,6 +886,7 @@ async def completions_v1(request: CompletionRequest,
                         prompt_tokens=final_res.input_token_len,
                         completion_tokens=final_res.generate_token_len,
                         total_tokens=total_tokens,
+                        prefix_cached_tokens=final_res.prefix_cached_token_len,
                     )
                 response_json = create_stream_response_json(
                     index=0,
@@ -942,6 +947,7 @@ async def completions_v1(request: CompletionRequest,
         usage.prompt_tokens += final_res.input_token_len
         usage.completion_tokens += final_res.generate_token_len
         usage.total_tokens += total_tokens
+        usage.prefix_cached_tokens = final_res.prefix_cached_token_len
 
     await asyncio.gather(
         *[_inner_call(i, generators[i]) for i in range(len(generators))])
