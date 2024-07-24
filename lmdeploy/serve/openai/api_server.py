@@ -353,12 +353,10 @@ async def chat_completions_v1_qos(request: ChatCompletionRequestQos,
         final_res.history_token_len, final_res.input_token_len,
         final_res.generate_token_len
     ])
-    usage = UsageInfo(
-        prompt_tokens=final_res.input_token_len,
-        completion_tokens=final_res.generate_token_len,
-        total_tokens=total_tokens,
-        prefix_cached_tokens=final_res.prefix_cached_token_len
-    )
+    usage = UsageInfo(prompt_tokens=final_res.input_token_len,
+                      completion_tokens=final_res.generate_token_len,
+                      total_tokens=total_tokens,
+                      prefix_cached_tokens=final_res.prefix_cached_token_len)
     response = ChatCompletionResponse(
         id=request_id,
         created=created_time,

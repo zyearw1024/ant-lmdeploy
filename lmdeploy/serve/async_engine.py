@@ -657,8 +657,12 @@ class AsyncEngine(LogitsMixin):
                 # byte sequence
                 if not response.endswith('�'):
                     response = ''  # avaid returning the last response twice
-                yield GenOut(response, self.id2step[str(session_id)],
-                             len(input_ids), tokens, finish_reason, prefix_cached_token_len=prefix_cached_token_len)
+                yield GenOut(response,
+                             self.id2step[str(session_id)],
+                             len(input_ids),
+                             tokens,
+                             finish_reason,
+                             prefix_cached_token_len=prefix_cached_token_len)
                 # update step
                 self.id2step[str(session_id)] += len(input_ids) + tokens
                 if sequence_end:
