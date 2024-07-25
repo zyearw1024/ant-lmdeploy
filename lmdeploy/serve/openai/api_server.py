@@ -674,7 +674,7 @@ async def completions_v1_qos(request: CompletionRequestQos,
             choices=[choice_data],
             usage=usage,
         )
-        response_json = response.model_dump_json()
+        response_json = response.model_dump_json(exclude_none=True)
 
         return response_json
 
@@ -855,7 +855,7 @@ async def completions_v1(request: CompletionRequest,
             choices=[choice_data],
             usage=usage,
         )
-        response_json = response.model_dump_json()
+        response_json = response.model_dump_json(exclude_none=True)
 
         return response_json
 
