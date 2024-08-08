@@ -1,7 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import asyncio
 import copy
-import json
 import os
 import time
 from http import HTTPStatus
@@ -256,7 +255,7 @@ async def chat_completions_v1_qos(request: ChatCompletionRequestQos,
         probable tokens with probabilities that add up to top_p or higher
         are kept for generation.
     - n (int): How many chat completion choices to generate for each input
-        message. Only support one here.
+        message. **Only support one here**.
     - stream: whether to stream the results or not. Default to false.
     - max_tokens (int): output token nums
     - repetition_penalty (float): The parameter for repetition penalty.
@@ -386,7 +385,7 @@ async def chat_completions_v1(request: ChatCompletionRequest,
         probable tokens with probabilities that add up to top_p or higher
         are kept for generation.
     - n (int): How many chat completion choices to generate for each input
-        message. Only support one here.
+        message. **Only support one here**.
     - stream: whether to stream the results or not. Default to false.
     - max_tokens (int | None): output token nums. Default to None.
     - repetition_penalty (float): The parameter for repetition penalty.
@@ -541,22 +540,17 @@ async def chat_completions_v1(request: ChatCompletionRequest,
             final_logprobs.extend(res.logprobs)
 
     tool_calls = None
-    if request.tool_choice != 'none' and '<|plugin|>' in text:
+    if request.tool_choice != 'none' and ('<|plugin|>' in text
+                                          or '<function=' in text):
         if final_res.finish_reason == 'stop':
             final_res.finish_reason = 'tool_calls'
-        # TODO may move to generate function
-        text, action = text.split('<|action_start|><|plugin|>')
-        action = action.split('<|action_end|>'.strip())[0]
-        action = action[action.find('{'):]
         try:  # TODO add json_schema guidance to turbomind
-            action = json.loads(action)
-            action_id = [tool.function.name
-                         for tool in request.tools].index(action['name'])
+            text, action_id, name, parameters = VariableInterface.async_engine.parse_tool_response(  # noqa
+                text, request.tools)
             tool_calls = [
                 ToolCall(id=str(action_id),
-                         function=FunctionResponse(name=action['name'],
-                                                   arguments=json.dumps(
-                                                       action['parameters'])))
+                         function=FunctionResponse(name=name,
+                                                   arguments=parameters))
             ]
         except Exception as e:
             logger.error(f'Exception: {e}')
@@ -620,7 +614,7 @@ async def completions_v1_qos(request: CompletionRequestQos,
         probable tokens with probabilities that add up to top_p or higher
         are kept for generation.
     - n (int): How many chat completion choices to generate for each input
-        message. Only support one here.
+        message. **Only support one here**.
     - stream: whether to stream the results or not. Default to false.
     - repetition_penalty (float): The parameter for repetition penalty.
         1.0 means no penalty
@@ -771,7 +765,7 @@ async def completions_v1(request: CompletionRequest,
         probable tokens with probabilities that add up to top_p or higher
         are kept for generation.
     - n (int): How many chat completion choices to generate for each input
-        message. Only support one here.
+        message. **Only support one here**.
     - stream: whether to stream the results or not. Default to false.
     - repetition_penalty (float): The parameter for repetition penalty.
         1.0 means no penalty
@@ -1216,7 +1210,6 @@ def serve(model_path: str,
           chat_template_config: Optional[ChatTemplateConfig] = None,
           server_name: str = '0.0.0.0',
           server_port: int = 23333,
-          tp: int = 1,
           allow_origins: List[str] = ['*'],
           allow_credentials: bool = True,
           allow_methods: List[str] = ['*'],
@@ -1243,8 +1236,9 @@ def serve(model_path: str,
                     on huggingface.co, such as "internlm/internlm-chat-7b",
                     "Qwen/Qwen-7B-Chat ", "baichuan-inc/Baichuan2-7B-Chat"
                     and so on.
-        model_name (str): needed when model_path is a pytorch model on
-            huggingface.co, such as "InternLM/internlm-chat-7b"
+        model_name (str): the name of the served model. It can be accessed
+            by the RESTful API `/v1/models`. If it is not specified,
+            `model_path` will be adopted
         backend (str): either `turbomind` or `pytorch` backend. Default to
             `turbomind` backend.
         backend_config (TurbomindEngineConfig | PytorchEngineConfig): beckend
@@ -1286,7 +1280,7 @@ def serve(model_path: str,
         ssl_certfile = os.environ['SSL_CERTFILE']
         http_or_https = 'https'
 
-    pipeline_type, pipeline_class = get_task(model_path)
+    _, pipeline_class = get_task(model_path)
 
     VariableInterface.async_engine = pipeline_class(
         model_path=model_path,
@@ -1294,7 +1288,6 @@ def serve(model_path: str,
         backend=backend,
         backend_config=backend_config,
         chat_template_config=chat_template_config,
-        tp=tp,
         **kwargs)
 
     if qos_config_path:
