@@ -13,6 +13,8 @@ from lmdeploy.pytorch.nn.linear import (build_merged_colwise_linear,
 from lmdeploy.pytorch.nn.rotary_embedding import Llama3Parameters
 from lmdeploy.pytorch.weight_loader.model_weight_loader import load_weight
 
+from .utils.cudagraph import CudaGraphMixin
+
 
 class LlamaAttention(nn.Module):
     """Rewrite module of LlamaAttention."""
@@ -112,10 +114,11 @@ class LlamaMLP(nn.Module):
         super().__init__()
         quantization_config = getattr(config, 'quantization_config', None)
         # gate up
+        mlp_bias = getattr(config, 'mlp_bias', False)
         self.gate_up_proj = build_merged_colwise_linear(
             config.hidden_size,
             [config.intermediate_size, config.intermediate_size],
-            bias=config.mlp_bias,
+            bias=mlp_bias,
             dtype=dtype,
             device=device,
             quant_config=quantization_config,
@@ -128,7 +131,7 @@ class LlamaMLP(nn.Module):
         # down
         self.down_proj = build_rowwise_linear(config.intermediate_size,
                                               config.hidden_size,
-                                              bias=config.mlp_bias,
+                                              bias=mlp_bias,
                                               quant_config=quantization_config,
                                               dtype=dtype,
                                               device=device,
@@ -317,7 +320,7 @@ class LlamaModel(nn.Module):
         return self.embed_tokens
 
 
-class LlamaForCausalLM(nn.Module):
+class LlamaForCausalLM(nn.Module, CudaGraphMixin):
     """rewrote model of LlamaForCausalLM."""
 
     packed_modules_mapping = {
@@ -366,9 +369,11 @@ class LlamaForCausalLM(nn.Module):
             attn_metadata=attn_metadata,
             inputs_embeds=inputs_embeds,
         )
+        return hidden_states
 
-        logits = self.lm_head(hidden_states)
-        return logits
+    def get_logits(self, hidden_states: torch.Tensor):
+        """compute logits of the model output."""
+        return self.lm_head(hidden_states)
 
     def support_cuda_graph(
         self,

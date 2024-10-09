@@ -74,13 +74,15 @@ class FilterDuplicateWarning(logging.Filter):
         return False
 
 
-def get_logger(
-    name: Optional[str] = None,
-    log_file: Optional[str] = None,
-    log_level: int = logging.INFO,
-    file_mode: str = 'w',
-    log_formatter: str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-) -> Logger:
+_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d' \
+          ' - %(message)s'
+
+
+def get_logger(name: Optional[str] = None,
+               log_file: Optional[str] = None,
+               log_level: int = logging.INFO,
+               file_mode: str = 'w',
+               log_formatter: str = _FORMAT) -> Logger:
     """Initialize and get a logger by name.
 
     If the logger has not been initialized, this method will initialize the
@@ -188,6 +190,8 @@ def get_model(pretrained_model_name_or_path: str,
     import os
     if os.getenv('LMDEPLOY_USE_MODELSCOPE', 'False').lower() == 'true':
         from modelscope import snapshot_download
+    elif os.getenv('LMDEPLOY_USE_OPENMIND_HUB', 'False').lower() == 'true':
+        from openmind_hub import snapshot_download
     else:
         from huggingface_hub import snapshot_download
 

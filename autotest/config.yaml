@@ -9,7 +9,6 @@ tp_config:
     internlm2-chat-20b: 2
     Baichuan2-13B-Chat: 2
     Mixtral-8x7B-Instruct-v0.1: 2
-    internlm2-20b: 2
     Qwen-VL-Chat: 2
     llava-v1.5-13b: 2
     internlm2_5-20b-chat: 2
@@ -17,6 +16,7 @@ tp_config:
     internlm2_5-7b-chat-1m: 4
     Qwen2-7B-Instruct-GPTQ-Int4: 2
     InternVL2-40B: 2
+    MiniCPM-V-2_6: 2
 
 turbomind_chat_model:
     - meta-llama/Meta-Llama-3-1-8B-Instruct
@@ -25,9 +25,7 @@ turbomind_chat_model:
     - meta-llama/Llama-2-7b-chat-hf
     - internlm/internlm2_5-7b-chat
     - internlm/internlm2_5-20b-chat
-    - internlm/internlm2-chat-7b
     - internlm/internlm2-chat-20b
-    - internlm/internlm2-chat-7b-4bits
     - internlm/internlm2-chat-20b-4bits
     - internlm/internlm-chat-20b
     - internlm/internlm-xcomposer2-4khd-7b
@@ -44,6 +42,7 @@ turbomind_chat_model:
     - Qwen/Qwen1.5-7B-Chat
     - Qwen/Qwen1.5-4B-Chat-AWQ
     - Qwen/Qwen-VL-Chat
+    - Qwen/Qwen2.5-7B-Instruct
     - Qwen/Qwen2-7B-Instruct-GPTQ-Int4
     - mistralai/Mistral-7B-Instruct-v0.1
     - mistralai/Mistral-7B-Instruct-v0.2
@@ -61,10 +60,10 @@ turbomind_chat_model:
 
 pytorch_chat_model:
     - meta-llama/Meta-Llama-3-8B-Instruct
+    - meta-llama/Meta-Llama-3-1-8B-Instruct
     - meta-llama/Llama-2-7b-chat-hf
     - internlm/internlm2_5-7b-chat
     - internlm/internlm2_5-20b-chat
-    - internlm/internlm2-chat-7b
     - internlm/internlm2-chat-20b
     - internlm/internlm-chat-20b
     - OpenGVLab/InternVL2-2B
@@ -81,6 +80,8 @@ pytorch_chat_model:
     - Qwen/Qwen2-1.5B-Instruct
     - Qwen/Qwen1.5-7B-Chat
     - Qwen/Qwen1.5-MoE-A2.7B-Chat
+    - Qwen/Qwen2-VL-2B-Instruct
+    - Qwen/Qwen2-VL-7B-Instruct
     - mistralai/Mistral-7B-Instruct-v0.1
     - mistralai/Mistral-7B-Instruct-v0.2
     - mistralai/Mixtral-8x7B-Instruct-v0.1
@@ -88,6 +89,7 @@ pytorch_chat_model:
     - google/gemma-2-9b-it
     - deepseek-ai/deepseek-moe-16b-chat
     - deepseek-ai/deepseek-coder-1.3b-instruct
+    - deepseek-ai/DeepSeek-V2-Lite-Chat
     - THUDM/chatglm2-6b
     - THUDM/cogvlm2-llama3-chinese-chat-19B
     - THUDM/glm-4v-9b
@@ -99,14 +101,14 @@ pytorch_chat_model:
 turbomind_base_model:
     - internlm/internlm2_5-7b
     - internlm/internlm2_5-1_8b
-    - internlm/internlm2-20b
+    - internlm/internlm2_5-20b
     - codellama/CodeLlama-7b-hf
 
 pytorch_base_model:
     - tiiuae/falcon-7b
     - internlm/internlm2_5-7b
     - internlm/internlm2_5-1_8b
-    - internlm/internlm2-20b
+    - internlm/internlm2_5-20b
 
 vl_model:
     - Qwen/Qwen-VL-Chat
@@ -121,6 +123,8 @@ vl_model:
     - OpenGVLab/InternVL2-8B
     - OpenGVLab/InternVL2-26B
     - OpenGVLab/InternVL2-40B
+    - Qwen/Qwen2-VL-2B-Instruct
+    - Qwen/Qwen2-VL-7B-Instruct
     - internlm/internlm-xcomposer2-vl-7b
     - internlm/internlm-xcomposer2d5-7b
     - internlm/internlm-xcomposer2-4khd-7b
@@ -129,6 +133,7 @@ vl_model:
     - THUDM/glm-4v-9b
     - microsoft/Phi-3-vision-128k-instruct
     - openbmb/MiniCPM-Llama3-V-2_5
+    - openbmb/MiniCPM-V-2_6
 
 turbomind_quatization:
     awq:
@@ -139,7 +144,7 @@ turbomind_quatization:
         - internlm/internlm2_5-7b
         - internlm/internlm2_5-20b-chat
         - internlm/internlm2-chat-20b
-        - internlm/internlm2-20b
+        - internlm/internlm2_5-20b
         - internlm/internlm-chat-20b
         - internlm/internlm-xcomposer2-4khd-7b
         - internlm/internlm-xcomposer2d5-7b
@@ -152,6 +157,7 @@ turbomind_quatization:
         - Qwen/Qwen1.5-7B-Chat
         - Qwen/Qwen2-7B-Instruct
         - Qwen/Qwen2-1.5B-Instruct
+        - Qwen/Qwen2.5-7B-Instruct
         - Qwen/Qwen-VL-Chat
         - liuhaotian/llava-v1.5-13b
         - liuhaotian/llava-v1.6-vicuna-7b
@@ -170,13 +176,9 @@ turbomind_quatization:
         - meta-llama/Llama-2-7b-chat-hf
         - internlm/internlm2_5-7b-chat
         - internlm/internlm2_5-20b-chat
-        - internlm/internlm2-chat-1_8b
-        - internlm/internlm2-chat-7b
         - internlm/internlm2-chat-20b
-        - internlm/internlm2-chat-7b-4bits
         - internlm/internlm2-chat-20b-4bits
         - internlm/internlm-chat-20b
-        - internlm/internlm-xcomposer2-7b
         - internlm/internlm-xcomposer2-4khd-7b
         - internlm/internlm-xcomposer2d5-7b
         - OpenGVLab/InternVL-Chat-V1-5
@@ -202,10 +204,10 @@ turbomind_quatization:
 pytorch_quatization:
     awq:
         - meta-llama/Meta-Llama-3-8B-Instruct
+        - meta-llama/Meta-Llama-3-1-8B-Instruct
         - meta-llama/Llama-2-7b-chat-hf
         - internlm/internlm2_5-7b-chat
         - internlm/internlm2_5-20b-chat
-        - internlm/internlm2-chat-7b
         - internlm/internlm2-chat-20b
         - OpenGVLab/InternVL-Chat-V1-5
         - 01-ai/Yi-6B-Chat
@@ -216,9 +218,11 @@ pytorch_quatization:
         - meta-llama/Meta-Llama-3-8B-Instruct
         - meta-llama/Llama-2-7b-chat-hf
         - internlm/internlm2-chat-20b
-        - internlm/internlm2-chat-7b
+        - internlm/internlm2_5-7b-chat
+        - internlm/internlm2_5-20b-chat
         - 01-ai/Yi-6B-Chat
-        - internlm/internlm2-20b
+        - internlm/internlm2_5-20b
+        - internlm/internlm2_5-7b
 
 
 longtext_model:
@@ -235,3 +239,8 @@ benchmark_model:
     - meta-llama/Meta-Llama-3-1-70B-Instruct
     - internlm/internlm2_5-7b-chat
     - internlm/internlm2_5-20b-chat
+    - THUDM/glm-4-9b-chat
+    - Qwen/Qwen2-7B-Instruct
+    - mistralai/Mistral-7B-Instruct-v0.3
+    - mistralai/Mixtral-8x7B-Instruct-v0.1
+    - deepseek-ai/DeepSeek-V2-Lite-Chat
