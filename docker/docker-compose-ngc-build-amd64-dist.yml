@@ -1,0 +1,51 @@
+version: "3.9"
+# FROM nvcr.io/nvidia/pytorch:24.02-py3
+ 
+# Ubuntu 22.04 including Python 3.10
+# NVIDIA CUDA 12.3.2
+# NVIDIA cuBLAS 12.3.4.1
+# NVIDIA cuDNN 9.0.0.306
+# NVIDIA NCCL 2.19.4
+# NVIDIA RAPIDS™ 23.12
+# rdma-core 39.0
+# NVIDIA HPC-X 2.16rc4
+# OpenMPI 4.1.4+
+# GDRCopy 2.3
+# TensorBoard 2.9.0
+# Nsight Compute 2023.3.1.1
+# Nsight Systems 2023.4.1.97
+# NVIDIA TensorRT™ 8.6.3
+# Torch-TensorRT 2.2.0a0
+# NVIDIA DALI® 1.34
+# MAGMA 2.6.2
+# JupyterLab 2.3.2 including Jupyter-TensorBoard
+# TransformerEngine 1.3
+# PyTorch quantization wheel 2.1.2
+x-node-common:
+  &node-common
+  platform: linux/amd64
+  environment:
+    &node-common-env
+    TZ: Asia/Shanghai
+    LOG_LEVEL: INFO
+    CUDA_VISIBLE_DEVICES: 0
+    LMDEPLOY_VERSION: ${LMDEPLOY_VERSION:-0.6.1.1}
+    WRITE_WHL: "true"  # 添加环境变量，默认值为 "true"
+  image: nvcr.io/nvidia/pytorch:24.02-py3
+  logging:
+    driver: json-file
+    options:
+      max-size: "100m"
+      max-file: "10"
+
+services:
+  build-lmdeploy-whl-amd64-01:
+    <<: *node-common
+    container_name: build-lmdeploy-whl-amd64-01
+    volumes:
+      - ./../:/ant_lmdeploy
+      - ./lmdeploy_build:/lmdeploy_build
+      - ./docker_build_cache:/docker_build_cache
+      - ./../builder/manywheel/entrypoint_build_ngc.sh:/entrypoint_build.sh
+    entrypoint: sh /entrypoint_build.sh
+ 
