@@ -1,0 +1,12 @@
+/.github/
+/.venv
+/build
+dist
+# Ignore deploy_docker
+deploy_docker/
+docker/
+*.so
+
+# LMDeploy
+workspace/
+work_dir*/
