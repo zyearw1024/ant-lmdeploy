@@ -48,8 +48,7 @@ class CudaGraphMixin:
         **kwargs,
     ):
         """return True is model support cudagraph."""
-        seq_lens = input_ids.size(1)
-        return seq_lens <= 256
+        return attn_metadata.is_decoding
 
     def make_buffers_cudagraph(self, graph_meta: CudaGraphMeta, *args,
                                **kwargs) -> BuffType:
@@ -83,6 +82,10 @@ class CudaGraphMixin:
         input_buffers['local_adapter_ids'] = torch.zeros(max_batches,
                                                          dtype=torch.int64,
                                                          device=device)
+        # create buffer for cross_attn_metadata here
+        input_buffers['fill_seqlens'] = torch.zeros(max_batches,
+                                                    dtype=torch.int64,
+                                                    device=device)
 
         return input_buffers
 
@@ -136,6 +139,11 @@ class CudaGraphMixin:
             past_key_values=past_key_values,
             attn_metadata=attn_metadata,
         )
+
+        cross_attn_metadata = kwargs.get('cross_attn_metadata', None)
+        if cross_attn_metadata is not None:
+            # TODO: update cross_attn_metadata here
+            new_inputs['cross_attn_metadata'] = cross_attn_metadata
 
         if is_decoding:
             new_inputs['input_ids'] = input_buffers[

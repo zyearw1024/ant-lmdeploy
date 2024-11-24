@@ -352,6 +352,14 @@ class MiniGeminiLlamaTempateWrapper(VLChatTemplateWrapper):
         return res
 
 
+class MllamaTempateWrapper(VLChatTemplateWrapper):
+    """Mllama chat template."""
+
+    def append_image_token(self, prompt, num_images: int):
+        """append image tokens to user prompt."""
+        return f'{IMAGE_TOKEN * num_images}{prompt}'
+
+
 class MiniCPMVTempateWrapper(VLChatTemplateWrapper):
     """MiniCPM-Llama3-V-2_5 chat template."""
 
@@ -420,6 +428,84 @@ class GLM4VChatTemplateWrapper(VLChatTemplateWrapper):
     pass
 
 
+class MolmoChatTemplateWrapper(VLChatTemplateWrapper):
+
+    async def async_collect_pil_images(
+            self, messages: List[Dict]) -> List[Tuple[PIL.Image.Image, Dict]]:
+        """collect images from messages.
+
+        Args:
+            messages (List[Dict]): a user request of GPT4V message format
+        """
+        if isinstance(messages, Dict):
+            messages = [messages]
+        assert isinstance(messages, List)
+
+        out_messages = [None] * len(messages)
+
+        def _inner_call(i, in_messages, out_messages):
+            role = in_messages[i]['role']
+            content = in_messages[i]['content']
+            if role != 'user' or isinstance(content, str):
+                # means message is user's prompt input or assistant's prompt,
+                # returning it directory
+                out_messages[i] = in_messages[i]
+                return
+            # the role is a user and the content is a list
+            assert isinstance(content, List)
+            message = dict(role=role, content='', images=[])
+            for item in content:
+                # 'image_url': means url or local path to image.
+                # 'image_data': means PIL.Image.Image object.
+                if item['type'] == 'image_url':
+                    try:
+                        image = load_image(item['image_url']['url'])
+                        message['images'].append(image)
+                    except KeyError:
+                        logger.error(f'invalid format {message}')
+                elif item['type'] == 'image_data':
+                    try:
+                        image = load_image(item['image_data']['data'])
+                        message['images'].append(image)
+                    except KeyError:
+                        logger.error(f'invalid format {message}')
+                elif item['type'] == 'text':
+                    message['content'] = item['text']
+                else:
+                    logger.error(f'unexpected content type {message}')
+            out_messages[i] = message
+
+        await asyncio.gather(*[
+            asyncio.get_event_loop().run_in_executor(None, _inner_call, i,
+                                                     messages, out_messages)
+            for i in range(len(messages))
+        ])
+        return [(None, out_messages)]
+
+    def messages2prompt(self, messages, sequence_start=True, **kwargs) -> str:
+        """Return a placeholder "IMAGE_TOKEN" so that
+        `vl_asyn_engine._get_prompt_input` can know that it."""
+        if isinstance(messages, str):
+            return self.chat_template.messages2prompt(messages, sequence_start)
+        else:
+            _messages = []
+            for message in messages:
+                role, content = message['role'], message['content']
+                if role != 'user' or isinstance(content, str):
+                    _messages.append(message)
+                    continue
+                for item in content:
+                    item_type = item['type']
+                    if item_type in ['image_url', 'image_data']:
+                        # Return the image placeholder so that
+                        # `vl_asyn_engine._get_prompt_input` can know that the
+                        # request contains images
+                        return IMAGE_TOKEN
+                    _messages.append(dict(role=role, content=item[item_type]))
+            return self.chat_template.messages2prompt(_messages,
+                                                      sequence_start)
+
+
 def get_vl_prompt_template(model_path: str, chat_template: BaseModel,
                            model_name: str) -> VLChatTemplateWrapper:
     """get vision language prompt template."""
@@ -438,6 +524,8 @@ def get_vl_prompt_template(model_path: str, chat_template: BaseModel,
         return LlavaVLChatTemplateWrapper(chat_template)
     elif arch == 'MultiModalityCausalLM':  # deepseek-vl
         return DeepSeekVLChatTemplateWrapper(chat_template)
+    elif arch == 'MllamaForConditionalGeneration':  # llama 3.2
+        return MllamaTempateWrapper(chat_template)
     elif arch == 'CogVLMForCausalLM':
         return CogVLMChatTemplateWrapper(chat_template)
     elif arch in ['InternLMXComposer2ForCausalLM', 'InternLM2ForCausalLM']:
@@ -457,4 +545,6 @@ def get_vl_prompt_template(model_path: str, chat_template: BaseModel,
         return GLM4VChatTemplateWrapper(chat_template)
     elif arch == 'Qwen2VLForConditionalGeneration':
         return Qwen2VLChatTemplateWrapper(chat_template)
+    elif arch == 'MolmoForCausalLM':
+        return MolmoChatTemplateWrapper(chat_template)
     raise ValueError(f'unsupported vl_prompt_template with arch {arch}')
