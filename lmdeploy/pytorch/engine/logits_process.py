@@ -101,7 +101,8 @@ def _guided_sampling(response_formats: Tuple[Dict], scores: torch.Tensor,
                 if isinstance(schema, Dict):
                     for key in ['json_schema', 'schema']:
                         if key in schema:
-                            schema = json.dumps(schema[key])
+                            schema = json.dumps(schema[key],
+                                                ensure_ascii=False)
                 elif schema is None:
                     from .guided_process import JSON_GRAMMAR
                     schema = JSON_GRAMMAR
@@ -308,7 +309,6 @@ class FusedLogitsProcessor(LogitsWarper):
 
         """
         sampling_inputs = self.sampling_inputs
-        scores = scores.clone()
 
         custom_logits_processors = self.sampling_inputs.logits_processors
         if any(custom_logits_processors):
@@ -337,6 +337,7 @@ class FusedLogitsProcessor(LogitsWarper):
                                   guided_input_ids, self.tokenizer)
         return scores
 
+    @torch.inference_mode()
     def sampling(self, logits: torch.Tensor):
         """sampling."""
         sampling_inputs = self.sampling_inputs

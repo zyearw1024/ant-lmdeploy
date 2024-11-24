@@ -5,8 +5,10 @@ LMDEPLOY_PYTORCH_MODEL_PATH = 'lmdeploy.pytorch.models'
 # ascend module
 MODULE_MAP = dict()
 ASCEND_MODULE_MAP = dict()
+MACA_MODULE_MAP = dict()
 
-DEVICE_SPECIAL_MODULE_MAP = dict(ascend=ASCEND_MODULE_MAP)
+DEVICE_SPECIAL_MODULE_MAP = dict(ascend=ASCEND_MODULE_MAP,
+                                 maca=MACA_MODULE_MAP)
 
 # llama
 MODULE_MAP.update({
@@ -147,6 +149,12 @@ MODULE_MAP.update({
     f'{LMDEPLOY_PYTORCH_MODEL_PATH}.internvl.InternVLChatModel'
 })
 
+# mono-internvl
+MODULE_MAP.update({
+    'InternLM2VEForCausalLM':
+    f'{LMDEPLOY_PYTORCH_MODEL_PATH}.internlm2_ve.InternLM2VEForCausalLM',
+})
+
 # phi3 vision
 MODULE_MAP.update({
     'Phi3VForCausalLM':
@@ -163,6 +171,18 @@ MODULE_MAP.update({
 MODULE_MAP.update({
     'MiniCPM3ForCausalLM':
     f'{LMDEPLOY_PYTORCH_MODEL_PATH}.minicpm3.MiniCPM3ForCausalLM',
+})
+
+# minicpmv2_6
+MODULE_MAP.update({
+    'MiniCPMV':
+    f'{LMDEPLOY_PYTORCH_MODEL_PATH}.minicpmv26.MiniCPMVForCausalLM',
+})
+
+# mllama
+MODULE_MAP.update({
+    'MllamaForConditionalGeneration':
+    f'{LMDEPLOY_PYTORCH_MODEL_PATH}.mllama.MllamaForConditionalGeneration',
 })
 
 CUSTOM_MODULE_MAP = dict()
