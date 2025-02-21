@@ -20,35 +20,30 @@
 // Modified from
 // https://github.com/NVIDIA/FasterTransformer/blob/main/src/fastertransformer/models/multi_gpu_gpt/ParallelGpt.cc
 
-#include "src/turbomind/models/llama/LlamaV2.h"
-#include "src/turbomind/kernels/attention/attention_params.h"
-#include "src/turbomind/kernels/decoding_kernels.h"
-#include "src/turbomind/kernels/gemm/tuner/params.h"
-#include "src/turbomind/kernels/gpt_kernels.h"
+#include <algorithm>
+#include <memory>
+
 #include "src/turbomind/macro.h"
+
 #include "src/turbomind/models/llama/LlamaBatch.h"
 #include "src/turbomind/models/llama/LlamaDenseWeight.h"
 #include "src/turbomind/models/llama/LlamaNcclGuard.h"
+#include "src/turbomind/models/llama/LlamaV2.h"
 #include "src/turbomind/models/llama/LlamaWeight.h"
-#include "src/turbomind/models/llama/Request.h"
 #include "src/turbomind/models/llama/SequenceManager.h"
 #include "src/turbomind/models/llama/llama_params.h"
 #include "src/turbomind/models/llama/llama_utils.h"
 #include "src/turbomind/models/llama/unified_decoder.h"
+
+#include "src/turbomind/kernels/decoding_kernels.h"
+#include "src/turbomind/kernels/gpt_kernels.h"
+
 #include "src/turbomind/utils/Tensor.h"
 #include "src/turbomind/utils/allocator.h"
 #include "src/turbomind/utils/anomaly_handler.h"
 #include "src/turbomind/utils/cuda_utils.h"
 #include "src/turbomind/utils/logger.h"
 #include "src/turbomind/utils/memory_utils.h"
-#include "src/turbomind/utils/monotonic.h"
-#include <algorithm>
-#include <chrono>
-#include <exception>
-#include <functional>
-#include <memory>
-#include <ratio>
-#include <sstream>
 
 namespace turbomind {
 
@@ -72,14 +67,11 @@ LlamaV2<T>::LlamaV2(const ModelParam&               model,
     lora_param_(lora),
     head_num_(model.head_num),
     size_per_head_(model.head_dim),
-    inter_size_(model.inter_size),
     hidden_units_(model.hidden_units),
     layer_num_(model.layer_num),
     vocab_size_(model.vocab_size),
     vocab_size_padded_(pad_vocab_size(model.vocab_size, tp.world_size_)),
     rmsnorm_eps_(model.norm_eps),
-    start_id_(model.start_id),
-    end_id_(model.end_id),
     tensor_para_(tp),
     local_head_num_(model.head_num / tp.world_size_),
     local_kv_head_num_(model.kv_head_num / tp.world_size_),
@@ -98,7 +90,6 @@ LlamaV2<T>::LlamaV2(const ModelParam&               model,
 
     dynamic_decode_layer_ = std::make_unique<DynamicDecodeLayer<float>>(vocab_size_,
                                                                         vocab_size_padded_,
-                                                                        0,  // end_id, deprecated
                                                                         stream_,
                                                                         cublas_wrapper_,
                                                                         allocator_,
@@ -378,7 +369,6 @@ void LlamaV2<T>::dynamicDecode(int*            token_ids,
                                const float*    logits,
                                const uint32_t* seq_limit_len,
                                const int*      context_length,
-                               const int*      end_ids,
                                int             step,
                                int             ite,
                                size_t          max_context_len,
@@ -396,12 +386,16 @@ void LlamaV2<T>::dynamicDecode(int*            token_ids,
         {"sequence_limit_length", {MEMORY_GPU, TYPE_UINT32, {batch_size}, seq_limit_len}},
         {"input_lengths", {MEMORY_GPU, TYPE_INT32, {batch_size, 1}, context_length}},
         {"ite", {MEMORY_CPU, TYPE_UINT32, {1}, &ite}},
-        {"end_id", {MEMORY_GPU, TYPE_INT32, {batch_size}, end_ids}},
         {"local_batch_size", {MEMORY_CPU, TYPE_INT32, {1}, &local_batch_size}},
     };
 
-    const std::vector<std::string> optional_inputs{
-        "stop_words_list", "bad_words_list", "runtime_top_k", "runtime_top_p", "temperature", "repetition_penalty"};
+    const std::vector<std::string> optional_inputs{"end_ids",
+                                                   "stop_words_list",
+                                                   "bad_words_list",
+                                                   "runtime_top_k",
+                                                   "runtime_top_p",
+                                                   "temperature",
+                                                   "repetition_penalty"};
     for (const auto& key : optional_inputs) {
         if (inputs->isExist(key)) {
             dynamic_decode_input_tensors.insert({key, inputs->at(key)});

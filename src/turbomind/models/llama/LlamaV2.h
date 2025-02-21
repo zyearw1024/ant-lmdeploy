@@ -22,19 +22,14 @@
 #pragma once
 
 #include "src/turbomind/layers/DynamicDecodeLayer.h"
-#include "src/turbomind/models/llama/Barrier.h"
 #include "src/turbomind/models/llama/LlamaBatch.h"
 #include "src/turbomind/models/llama/LlamaWeight.h"
-#include "src/turbomind/models/llama/Request.h"
 #include "src/turbomind/models/llama/SequenceManager.h"
 #include "src/turbomind/models/llama/llama_params.h"
 #include "src/turbomind/models/llama/unified_decoder.h"
 #include "src/turbomind/utils/allocator.h"
 #include "src/turbomind/utils/cublasMMWrapper.h"
-#include "src/turbomind/utils/instance_comm.h"
 #include "src/turbomind/utils/nccl_utils.h"
-#include <limits>
-#include <unordered_map>
 
 namespace turbomind {
 
@@ -96,7 +91,6 @@ private:
                        const float*    logits,
                        const uint32_t* seq_limit_len,
                        const int*      context_length,
-                       const int*      end_ids,
                        int             step,
                        int             ite,
                        size_t          max_context_len,
@@ -113,13 +107,10 @@ private:
     const size_t    head_num_;
     const size_t    size_per_head_;
     const size_t    hidden_units_;
-    const size_t    inter_size_;
     const size_t    layer_num_;
     const size_t    vocab_size_;
     const size_t    vocab_size_padded_;
     const float     rmsnorm_eps_;
-    const int       start_id_;
-    const int       end_id_;
     const NcclParam tensor_para_;
     const size_t    local_head_num_;
     const size_t    local_kv_head_num_;
