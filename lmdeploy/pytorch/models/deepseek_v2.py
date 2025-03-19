@@ -4,10 +4,10 @@ import math
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import torch
-import torch.distributed as dist
 import torch.nn.functional as F
 from torch import nn
 
+import lmdeploy.pytorch.distributed as dist
 from lmdeploy.pytorch.distributed import get_world_rank
 from lmdeploy.pytorch.model_inputs import StepContext, StepContextManager
 from lmdeploy.pytorch.nn import ApplyRotaryEmb, Attention, RMSNorm, RopeType, SiluAndMul, build_rotary_embedding
@@ -80,6 +80,7 @@ class DeepseekV2Attention(nn.Module):
         self.q_head_dim = config.qk_nope_head_dim + config.qk_rope_head_dim
         num_replicate_kv_heads = getattr(config, 'num_replicate_key_value_heads', 1)
         num_key_value_heads = getattr(config, 'num_key_value_heads', 1)
+        use_flash_mla = getattr(config, 'use_flash_mla', False)
 
         if self.q_lora_rank is None:
             self.q_proj = build_colwise_linear(
@@ -152,7 +153,8 @@ class DeepseekV2Attention(nn.Module):
                                   scale=self.softmax_scale,
                                   num_kv_heads=num_key_value_heads,
                                   v_head_size=config.kv_lora_rank,
-                                  num_replicate_kv_heads=num_replicate_kv_heads)
+                                  num_replicate_kv_heads=num_replicate_kv_heads,
+                                  use_flash_mla=use_flash_mla)
 
         self.vc = DeepseekV2BMM(self.num_heads, config.kv_lora_rank, self.v_head_dim, dtype=dtype, device=device)
         self.o_proj = build_rowwise_linear(
@@ -323,7 +325,14 @@ class MoEGate(nn.Module):
             topk_weight = scores.gather(1, topk_idx)
         else:
             raise RuntimeError(f'Unsupported topk_method: {self.topk_method}')
-        if not self.renormalize:
+
+        if self.renormalize:
+            denominator = topk_weight.sum(dim=-1, keepdim=True) + 1e-20
+            topk_weight = topk_weight / denominator
+            if not topk_weight.is_contiguous():
+                topk_weight = topk_weight.contiguous()
+
+        if not self.renormalize or self.topk_method == 'noaux_tc':
             topk_weight = topk_weight * self.routed_scaling_factor
         return topk_weight, topk_idx
 
@@ -352,7 +361,7 @@ class DeepseekV2MoE(nn.Module):
             self.ffn_dim,
             self.num_experts,
             top_k=self.top_k,
-            renormalize=self.renormalize,
+            renormalize=False,
             dtype=dtype,
             device=device,
             all_reduce=False,
@@ -455,7 +464,12 @@ class DeepseekV2DecoderLayer(nn.Module):
         quantization_config = None
 
         # build attention layer
-        self.self_attn = DeepseekV2Attention(config, dtype=dtype, device=device)
+        if getattr(config, 'use_mla', True):
+            self.self_attn = DeepseekV2Attention(config, dtype=dtype, device=device)
+        else:
+            # deepseek-vl2-tiny uses MHA LlamaAttention structure
+            from lmdeploy.pytorch.models.llama import LlamaAttention
+            self.self_attn = LlamaAttention(config, dtype=dtype, device=device)
 
         # mlp
         self.mlp = (DeepseekV2MoE(config, dtype=dtype, device=device) if
@@ -525,7 +539,8 @@ class DeepseekV2Model(nn.Module):
         self.norm = RMSNorm(config.hidden_size, config.rms_norm_eps, quant_config=None, dtype=dtype, device=device)
 
         emb_type = RopeType.LinearScaling
-        rope_dim = config.qk_rope_head_dim
+        rope_dim = config.qk_rope_head_dim if getattr(config, 'use_mla', True) else (config.hidden_size //
+                                                                                     config.num_attention_heads)
         rope_max_pos_emb = config.max_position_embeddings
         rope_base = config.rope_theta
         scaling_factor = 1.0
@@ -784,13 +799,24 @@ class DeepseekV2ForCausalLM(nn.Module, CudaGraphMixin):
         scale_suffix = '.weight_scale_inv'
 
         config = self.config
-        qk_rope_head_dim = config.qk_rope_head_dim
-        kv_lora_rank = config.kv_lora_rank
-        qk_nope_head_dim = config.qk_nope_head_dim
-        q_head_dim = config.qk_nope_head_dim + config.qk_rope_head_dim
-        kv_dim = kv_lora_rank + qk_rope_head_dim
-        update_pe_mapping = [('q_proj', q_head_dim, qk_nope_head_dim), ('q_b_proj', q_head_dim, qk_nope_head_dim),
-                             ('kv_a_proj_with_mqa', kv_dim, kv_lora_rank)]
+
+        update_pe_mapping = []
+        if getattr(config, 'use_mla', True):
+            qk_rope_head_dim = config.qk_rope_head_dim
+            kv_lora_rank = config.kv_lora_rank
+            qk_nope_head_dim = config.qk_nope_head_dim
+            q_head_dim = config.qk_nope_head_dim + config.qk_rope_head_dim
+            kv_dim = kv_lora_rank + qk_rope_head_dim
+            update_pe_mapping = [('q_proj', q_head_dim, qk_nope_head_dim), ('q_b_proj', q_head_dim, qk_nope_head_dim),
+                                 ('kv_a_proj_with_mqa', kv_dim, kv_lora_rank)]
+        else:
+            # deepseek-vl2-tiny uses MHA LlamaAttention, weight loading differs from MLA
+            stacked_params_mapping.extend([
+                # (param_name, shard_name, shard_id)
+                ('.qkv_proj', '.q_proj', 'q'),
+                ('.qkv_proj', '.k_proj', 'k'),
+                ('.qkv_proj', '.v_proj', 'v'),
+            ])
 
         num_experts = self.config.n_routed_experts
         expert_params_mapping = []
@@ -821,7 +847,7 @@ class DeepseekV2ForCausalLM(nn.Module, CudaGraphMixin):
                 name = name[:-len(scale_suffix)] + '.scale'
             if '.experts' in name:
                 self._load_weight_experts(name, loaded_weight, params_dict, expert_params_mapping=expert_params_mapping)
-            elif '.self_attn' in name:
+            elif '.self_attn' in name and getattr(config, 'use_mla', True):
                 # attention
                 self._load_weight_attention(name, loaded_weight, params_dict, update_pe_mapping)
             else:

@@ -707,8 +707,7 @@ class Qwen2VLForConditionalGeneration(nn.Module, DeployModelMixin, CudaGraphMixi
         vis_pos_emb = None
         image_mask = None
         if context.input_multimodals is not None:
-            image_data = [input_mm['image'] for input_mm in context.input_multimodals]
-
+            image_data = [input_mm.get('image', []) for input_mm in context.input_multimodals]
             if len(image_data) > 0:
                 # flatten batch
                 image_data = [data for im_data in image_data for data in im_data]
@@ -857,7 +856,7 @@ class Qwen2VLForConditionalGeneration(nn.Module, DeployModelMixin, CudaGraphMixi
         for pos_ids, model_meta, input_mm in zip(batched_pos_ids, model_metas, input_multimodals):
             images = []
             if input_mm is not None:
-                images = input_mm['image']
+                images = input_mm.get('image', [])
             if model_meta is None or 'mrope_delta' not in model_meta:
                 mrope_delta = 0
             else:
@@ -926,7 +925,7 @@ class Qwen2VLInputProcessor(BaseModelInputProcessor):
             image_grid_thw = input_mm['image_grid_thw']
             offset = input_mm['offset']
             start = offset
-            image_token_id = input_mm.get('image_token_id', 0)
+            image_token_id = input_mm['image_token_id']
             num_pad = input_mm['image_tokens']
             if isinstance(num_pad, torch.Tensor):
                 num_pad = num_pad.item()

@@ -23,6 +23,10 @@ ______________________________________________________________________
 
 ## 最新ニュース 🎉
 
+<details open>
+<summary><b>2025</b></summary>
+</details>
+
 <details close>
 <summary><b>2024</b></summary>
 
@@ -146,7 +150,10 @@ LMDeploy TurboMindエンジンは卓越した推論能力を持ち、さまざ�
   <li>InternLM-XComposer2 (7B, 4khd-7B)</li>
   <li>InternLM-XComposer2.5 (7B)</li>
   <li>Qwen-VL (7B)</li>
+  <li>Qwen2-VL (2B, 7B, 72B)</li>
+  <li>Qwen2.5-VL (3B, 7B, 72B)</li>
   <li>DeepSeek-VL (7B)</li>
+  <li>DeepSeek-VL2 (3B, 16B, 27B)</li>
   <li>InternVL-Chat (v1.1-v1.5)</li>
   <li>InternVL2 (1B-76B)</li>
   <li>InternVL2.5(MPO) (1B-78B)</li>
@@ -162,6 +169,7 @@ LMDeploy TurboMindエンジンは卓越した推論能力を持ち、さまざ�
   <li>GLM-4V (9B)</li>
   <li>Llama3.2-vision (11B, 90B)</li>
   <li>Molmo (7B-D,72B)</li>
+  <li>Gemma3 (1B - 27B)</li>
 </ul>
 </td>
 </tr>
@@ -191,9 +199,9 @@ CUDA 11+プラットフォームでのインストールに関する情報、ま
 
 ```python
 import lmdeploy
-pipe = lmdeploy.pipeline("internlm/internlm3-8b-instruct")
-response = pipe(["Hi, pls intro yourself", "Shanghai is"])
-print(response)
+with lmdeploy.pipeline("internlm/internlm3-8b-instruct") as pipe:
+    response = pipe(["Hi, pls intro yourself", "Shanghai is"])
+    print(response)
 ```
 
 > \[!NOTE\]
