@@ -13,6 +13,7 @@ logger = get_logger('lmdeploy')
 
 TRITON_VERSION = version.parse(triton.__version__)
 VERSION_300 = version.parse('3.0.0')
+VERSION_320 = version.parse('3.2.0')
 assert TRITON_VERSION >= version.parse('2.2.0')
 
 # TODO: fast op might not work on non-nv device
@@ -339,6 +340,43 @@ def _flash_prefill_fwd_kernel(
 _nv_cap = None
 
 
+def _kernel_meta_sm7x(BLOCK_DK):
+    num_warps = 4
+    num_stages = min(4, max(2, 768 // BLOCK_DK))
+    BLOCK_M = max(16, 8192 // BLOCK_DK)
+    BLOCK_N = 32
+    return BLOCK_M, BLOCK_N, num_warps, num_stages
+
+
+def _kernel_meta_sm8x(BLOCK_DK: int, shared_kv: bool):
+    num_warps = 8
+    min_m = 64 if shared_kv else 16
+    BLOCK_M = max(min_m, 16384 // BLOCK_DK)
+    BLOCK_M = min(128, BLOCK_M)
+    BLOCK_N = BLOCK_M
+    num_stages = 3 if BLOCK_DK <= 128 else 2
+
+    return BLOCK_M, BLOCK_N, num_warps, num_stages
+
+
+def _kernel_meta_sm9x(BLOCK_DK: int, shared_kv: bool):
+
+    num_warps = 8
+    BLOCK_M = 128 if BLOCK_DK <= 256 else 64
+    if not shared_kv and BLOCK_DK >= 512:
+        BLOCK_M = 32
+
+    # fix crash on triton<3.2.0
+    if BLOCK_DK >= 512 and TRITON_VERSION < VERSION_320:
+        BLOCK_M = 32
+        num_warps = 4
+
+    BLOCK_N = 128 if BLOCK_DK <= 128 else 64
+
+    num_stages = 3 if BLOCK_DK <= 128 else 2
+    return BLOCK_M, BLOCK_N, num_warps, num_stages
+
+
 def flash_attention_fwd(
     q_states: Tensor,
     k_states: Tensor,
@@ -399,20 +437,15 @@ def flash_attention_fwd(
 
     shared_kv = k_states.data_ptr() == v_states.data_ptr() and BLOCK_DK == BLOCK_DV
 
-    BLOCK_N = 32
-    if _nv_cap[0] < 8:
-        BLOCK_M = max(16, 8192 // BLOCK_DK)
-    else:
-        BLOCK_M = max(16, 16384 // BLOCK_DK)
-    BLOCK_M = min(128, BLOCK_M)
     num_warps = 4
-    num_stages = min(4, max(2, 1024 // BLOCK_DK))
-    if BLOCK_DK >= 512:
-        num_stages = 2
-    elif BLOCK_DK >= 256:
-        num_stages = 3
+    if _nv_cap[0] < 8:
+        BLOCK_M, BLOCK_N, num_warps, num_stages = _kernel_meta_sm7x(BLOCK_DK)
+    if _nv_cap[0] < 9:
+        BLOCK_M, BLOCK_N, num_warps, num_stages = _kernel_meta_sm8x(BLOCK_DK, shared_kv)
     else:
-        num_stages = 4
+        BLOCK_M, BLOCK_N, num_warps, num_stages = _kernel_meta_sm9x(BLOCK_DK, shared_kv)
+
+    BLOCK_M = min(128, BLOCK_M)
     _flash_prefill_fwd_kernel[grid](
         q_states,
         k_states,

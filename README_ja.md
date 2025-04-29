@@ -128,7 +128,6 @@ LMDeploy TurboMindエンジンは卓越した推論能力を持ち、さまざ�
   <li>ChatGLM2 (6B)</li>
   <li>GLM4 (9B)</li>
   <li>CodeGeeX4 (9B)</li>
-  <li>Falcon (7B - 180B)</li>
   <li>YI (6B-34B)</li>
   <li>Mistral (7B)</li>
   <li>DeepSeek-MoE (16B)</li>
@@ -136,11 +135,11 @@ LMDeploy TurboMindエンジンは卓越した推論能力を持ち、さまざ�
   <li>DeepSeek-V2.5 (236B)</li>
   <li>Mixtral (8x7B, 8x22B)</li>
   <li>Gemma (2B - 7B)</li>
-  <li>Dbrx (132B)</li>
   <li>StarCoder2 (3B - 15B)</li>
   <li>Phi-3-mini (3.8B)</li>
   <li>Phi-3.5-mini (3.8B)</li>
   <li>Phi-3.5-MoE (16x3.8B)</li>
+  <li>Phi-4-mini (3.8B)</li>
   <li>MiniCPM3 (4B)</li>
 </ul>
 </td>
@@ -159,7 +158,6 @@ LMDeploy TurboMindエンジンは卓越した推論能力を持ち、さまざ�
   <li>InternVL2.5(MPO) (1B-78B)</li>
   <li>Mono-InternVL (2B)</li>
   <li>ChemVLM (8B-26B)</li>
-  <li>MiniGeminiLlama (7B)</li>
   <li>CogVLM-Chat (17B)</li>
   <li>CogVLM2-Chat (19B)</li>
   <li>MiniCPM-Llama3-V-2_5</li>
@@ -170,6 +168,7 @@ LMDeploy TurboMindエンジンは卓越した推論能力を持ち、さまざ�
   <li>Llama3.2-vision (11B, 90B)</li>
   <li>Molmo (7B-D,72B)</li>
   <li>Gemma3 (1B - 27B)</li>
+  <li>Llama4 (Scout, Maverick)</li>
 </ul>
 </td>
 </tr>

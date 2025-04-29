@@ -16,7 +16,7 @@ from lmdeploy.pytorch.engine import EngineInstance
 from lmdeploy.tokenizer import DetokenizeState, Tokenizer
 from lmdeploy.utils import get_logger
 
-get_logger('lmdeploy').setLevel('ERROR')
+get_logger('lmdeploy').setLevel('WARNING')
 os.environ['TM_LOG_LEVEL'] = 'ERROR'
 
 
@@ -32,7 +32,8 @@ def sample_requests(
     dataset = [data for data in dataset if len(data['conversations']) >= 2]
     # Only keep the first two turns of each conversation.
     dataset = [(data['conversations'][0]['value'], data['conversations'][1]['value']) for data in dataset]
-
+    # remove the empty prompts
+    dataset = [(query, answer) for query, answer in dataset if len(query) > 0]
     # pre-sample to avoid go through all the dataset
     dataset = random.sample(dataset, max(int(num_requests * 1.2), 1000))
 
