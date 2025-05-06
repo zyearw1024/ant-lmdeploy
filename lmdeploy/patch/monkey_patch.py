@@ -13,7 +13,7 @@ from lmdeploy.serve.openai.protocol import StreamOptions
 logger = logging.getLogger(__name__)
 
 # Compile the regex for checking /think or /nothink at the end of the string
-THINKING_TAG_REGEX = re.compile(r"/(think|nothink)\s*$")
+THINKING_TAG_REGEX = re.compile(r"/(think|nothink||no_think)\s*$")
 
 class ApiServeCliContext:
     args = None
@@ -100,7 +100,7 @@ def _handle_qwen3_thinking(request, qwen3_enable_thinking):
         if _enable_think:
             last_message["content"] += " /think"
         else:
-            last_message["content"] += " /nothink"
+            last_message["content"] += " /no_think"
 
     except Exception as e:
         logger.error(f"Error processing qwen3_enable_thinking: {e}")
