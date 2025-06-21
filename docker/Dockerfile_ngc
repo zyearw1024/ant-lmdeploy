@@ -94,8 +94,8 @@ WORKDIR /workspace
 
 # Step 2: Build and export the WHL file locally
 # This step builds the WHL file and exports it to the local ./lmdeploy_build directory
-# time DOCKER_BUILDKIT=1 docker build --progress=plain --platform linux/amd64 --build-arg LMDEPLOY_VERSION=0.6.1.3   --target exporter --output type=local,dest=./lmdeploy_build -f Dockerfile_ngc ..
+# time DOCKER_BUILDKIT=1 docker build --progress=plain --platform linux/amd64 --build-arg LMDEPLOY_VERSION=0.9.0.1   --target exporter --output type=local,dest=./lmdeploy_build -f Dockerfile_ngc ..
 
 # Step 3: Build the final image
 # This step builds the complete image, including installing the WHL file
-# time DOCKER_BUILDKIT=1 docker build --progress=plain --platform linux/amd64 -t ant_lmdeploy:v0.6.1.3_cu123_$(date +"%Y%m%d") --build-arg LMDEPLOY_VERSION=0.6.1.3 -f Dockerfile_ngc ..
+# time DOCKER_BUILDKIT=1 docker build --progress=plain --platform linux/amd64 -t ant_lmdeploy:v0.9.0.1_cu123_$(date +"%Y%m%d") --build-arg LMDEPLOY_VERSION=0.9.0.1 -f Dockerfile_ngc ..
