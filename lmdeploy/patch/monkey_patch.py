@@ -86,7 +86,7 @@ def get_remove_first_think_chunk_status():
         if args is None:
             return False
         status = getattr(args, "remove_first_think_chunk", False)
-        print(f"remove_first_think_chunk: {status}")
+        logger.debug(f"remove_first_think_chunk: {status}")
         return status
     except:
         return False
@@ -284,6 +284,10 @@ async def _patch_stream_response(self, send: Send) -> None:
         if not isinstance(chunk, (bytes, memoryview)):
             chunk = chunk.encode(self.charset)
 
+        # Ensure chunk is bytes type for the function call
+        if isinstance(chunk, memoryview):
+            chunk = bytes(chunk)
+
         ignore_first_chunk = False
         if _is_first_chunk and get_remove_first_think_chunk_status():
             ignore_first_chunk = _check_and_handle_first_chunk(chunk)
@@ -302,18 +306,18 @@ def _patch_api_serve_check_request(request):
     This function is called at the beginning of each request and sets up the
     request-specific context using ContextVar for proper isolation.
     """
-    logger.info("Entering _patch_api_serve_check_request")
+    logger.debug("Entering _patch_api_serve_check_request")
     enable_stream_include_usage_status = get_stream_include_usage_status()
     if enable_stream_include_usage_status:
         stream_options = getattr(request, "stream_options", None)
         if not stream_options:
             stream_options = StreamOptions(include_usage=True)
             request.stream_options = stream_options
-            logger.info("Enabled stream_options.include_usage")
+            logger.debug("Enabled stream_options.include_usage")
 
-    # logger.info(f"Request before handling qwen3 thinking modes: {request.json()}")
+    # logger.debug(f"Request before handling qwen3 thinking modes: {request.json()}")
     handle_qwen3_thinking_modes(request)
-    # logger.info(f"Request after handling qwen3 thinking modes: {request.json()}")
+    # logger.debug(f"Request after handling qwen3 thinking modes: {request.json()}")
 
     # Set enable_thinking context based on CLI args and request
     # This context will be isolated per request/async task
@@ -411,7 +415,7 @@ def _patch_sub_parser_add_parser(self, name, **kwargs):
 
     if name != "api_server":
         return _parser
-    logger.info("patching api_server add_parser")
+    logger.info("Patching api_server add_parser")
     _parser = _patch_api_server_add_parser(_parser)
 
     return _parser
@@ -513,7 +517,7 @@ def _patch_deepseek_r1_reasoning_parser():
 
 def patch_all():
     """Apply all monkey patches."""
-    logger.info("monkey patching all")
+    logger.info("Applying all monkey patches")
 
     # Patch ArgumentParser - use try/except to handle type checker warnings
     try:
@@ -524,14 +528,17 @@ def patch_all():
                 _SubParsersAction.add_parser,
             )
         _SubParsersAction.add_parser = _patch_sub_parser_add_parser
+        logger.info("Successfully patched _SubParsersAction")
     except Exception as e:
         logger.warning(f"Failed to patch _SubParsersAction: {e}")
 
     # Patch openai_api_serve
     openai_api_serve.check_request = _patch_api_serve_check_request
+    logger.info("Successfully patched openai_api_serve.check_request")
 
     # Patch ArgumentParser
     ArgumentParser.parse_args = _patch_parse_args
+    logger.info("Successfully patched ArgumentParser.parse_args")
 
     # Always apply the patch to remove the first chunk, the behavior is controlled by get_remove_first_think_chunk_status() at runtime
     try:
@@ -540,7 +547,7 @@ def patch_all():
                 StreamingResponse, "_origin_stream_response", _origin_stream_response
             )
         StreamingResponse.stream_response = _patch_stream_response
-        logger.info("Patch for removing the first chunk applied.")
+        logger.info("Successfully applied patch for removing the first chunk")
     except Exception as e:
         logger.warning(f"Failed to patch StreamingResponse: {e}")
 
