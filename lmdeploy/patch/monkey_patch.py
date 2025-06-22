@@ -15,6 +15,7 @@ from lmdeploy.serve.openai.protocol import (
     DeltaMessage,
     ChatCompletionRequest,
 )
+from lmdeploy.serve.openai.api_server import VariableInterface
 
 logger = logging.getLogger(__name__)
 
@@ -156,9 +157,6 @@ def _handle_qwen3_prompt_suffix_thinking(request, qwen3_enable_prompt_suffix_thi
         content = last_message["content"]
         model_name = request.model
         _enable_think = True if model_name.endswith("-think") else False
-        if _enable_think:
-            # Strip -think suffix from model name
-            request.model = model_name.rstrip("-think")
         # Check if content already ends with /think or /nothink followed by optional whitespace
         if THINKING_TAG_REGEX.search(content):
             return
@@ -184,9 +182,7 @@ def _handle_qwen3_chat_template_thinking(request):
             model_name = request.model
             # Check if model name ends with '-think' (enable thinking)
             _enable_think = model_name.endswith("-think")
-            if _enable_think:
-                # Strip -think suffix from model name for compatibility
-                request.model = model_name.rstrip("-think")
+            # Do not strip -think suffix from model name to keep original model name in sse output
 
         # Hard switch: always override enable_thinking based on model name suffix
         # Only enable thinking if model name ends with '-think'
@@ -476,6 +472,26 @@ def _patched_extract_reasoning_content(
     return self._origin_extract_reasoning_content(model_output, request, **kwargs)
 
 
+_origin_get_model_list = openai_api_serve.get_model_list
+
+def _patch_get_model_list():
+    """Patch function for get_model_list to add -think model variants when thinking modes are enabled."""
+    model_list = _origin_get_model_list()
+    base_model_name = VariableInterface.async_engine.model_name
+
+    # Check if any qwen3 thinking mode is enabled via CLI args
+    qwen3_thinking_enabled = (
+        get_args_qwen3_enable_prompt_suffix_thinking() or
+        get_args_qwen3_enable_chat_template_thinking()
+    )
+
+    if qwen3_thinking_enabled and not base_model_name.endswith("-think"):
+        think_model_name = base_model_name + "-think"
+        if think_model_name not in model_list:
+            model_list.append(think_model_name)
+    return model_list
+
+
 def _patch_deepseek_r1_reasoning_parser():
     """Patch DeepSeekR1ReasoningParser to respect enable_thinking context."""
     try:
@@ -535,6 +551,9 @@ def patch_all():
     # Patch openai_api_serve
     openai_api_serve.check_request = _patch_api_serve_check_request
     logger.info("Successfully patched openai_api_serve.check_request")
+
+    openai_api_serve.get_model_list = _patch_get_model_list
+    logger.info("Successfully patched openai_api_serve.get_model_list")
 
     # Patch ArgumentParser
     ArgumentParser.parse_args = _patch_parse_args
