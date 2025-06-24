@@ -22,3 +22,4 @@ transformers
 triton<=3.2.0,>=3.0.0; sys_platform == "linux"
 uvicorn
 partial_json_parser
+orjson

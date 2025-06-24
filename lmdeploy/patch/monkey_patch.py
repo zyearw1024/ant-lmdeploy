@@ -1,6 +1,5 @@
 import logging
 import re
-import orjson
 from contextvars import ContextVar
 from typing import Optional, Sequence, Tuple, Union, List
 
@@ -18,6 +17,14 @@ from lmdeploy.serve.openai.protocol import (
 from lmdeploy.serve.openai.api_server import VariableInterface
 
 logger = logging.getLogger(__name__)
+
+try:
+    import orjson
+    _ORJSON_AVAILABLE = True
+except ImportError:
+    import json
+    _ORJSON_AVAILABLE = False
+    logger.warning("orjson not found, falling back to json module. Performance might be impacted.")
 
 # Context variable for request-level enable_thinking status
 # This ensures proper isolation between concurrent requests
@@ -244,7 +251,10 @@ def _check_and_handle_first_chunk(chunk: bytes) -> bool:
     try:
         # Attempt to parse the chunk as JSON
         parser_chunk = chunk.lstrip(b"data:")
-        chunk_data = orjson.loads(parser_chunk)
+        if _ORJSON_AVAILABLE:
+            chunk_data = orjson.loads(parser_chunk)
+        else:
+            chunk_data = json.loads(parser_chunk.decode("utf-8"))
         choices = chunk_data.get("choices", [])
         if choices:
             delta = choices[0].get("delta", {})
@@ -252,7 +262,7 @@ def _check_and_handle_first_chunk(chunk: bytes) -> bool:
             if content == "<think>":
                 # logger.debug("Ignoring first chunk containing '<think>'")
                 ignore_first_chunk = True
-    except orjson.JSONDecodeError:
+    except (orjson.JSONDecodeError, json.JSONDecodeError) as e:
         # Handle cases where the first chunk is not valid JSON
         logger.warning(
             "Failed to decode first chunk as JSON. Proceeding without ignoring."
