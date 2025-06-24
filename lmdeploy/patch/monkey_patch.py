@@ -27,12 +27,11 @@ except ImportError:
     logger.warning("orjson not found, falling back to json module. Performance might be impacted.")
 
 # Context variable for request-level enable_thinking status
-# This ensures proper isolation between concurrent requests
 enable_thinking_context: ContextVar[Optional[bool]] = ContextVar(
     "enable_thinking_context", default=None
 )
 
-# Compile the regex for checking /think or /nothink at the end of the string
+# Regex for checking /think or /nothink at the end of the string
 THINKING_TAG_REGEX = re.compile(r"/(think|nothink|no_think)\s*$")
 
 
@@ -64,11 +63,9 @@ def get_args_qwen3_enable_prompt_suffix_thinking():
         args = ApiServeCliContext.args
         if args is None:
             return False
-        # Check new parameter first, then fall back to old parameter for compatibility
+        # Check new parameter only
         if hasattr(args, "qwen3_enable_prompt_suffix_thinking"):
             return getattr(args, "qwen3_enable_prompt_suffix_thinking", False)
-        elif hasattr(args, "qwen3_enable_thinking"):
-            return getattr(args, "qwen3_enable_thinking", False)
         return False
     except:
         return False
@@ -81,7 +78,10 @@ def get_args_qwen3_enable_chat_template_thinking():
         args = ApiServeCliContext.args
         if args is None:
             return False
-        return getattr(args, "qwen3_enable_chat_template_thinking", False)
+        # Enable if either new or old parameter is set
+        chat_template_thinking = getattr(args, "qwen3_enable_chat_template_thinking", False)
+        legacy_thinking = getattr(args, "qwen3_enable_thinking", False)
+        return chat_template_thinking or legacy_thinking
     except:
         return False
 
@@ -181,18 +181,12 @@ def _handle_qwen3_prompt_suffix_thinking(request, qwen3_enable_prompt_suffix_thi
 def _handle_qwen3_chat_template_thinking(request):
     """Handle Qwen3 chat template thinking logic (hard switch)."""
     try:
-        # Initialize enable_thinking flag
         _enable_think = False
 
-        # Handle model name compatibility: support -think suffix like soft switch
         if hasattr(request, "model") and request.model:
             model_name = request.model
-            # Check if model name ends with '-think' (enable thinking)
             _enable_think = model_name.endswith("-think")
-            # Do not strip -think suffix from model name to keep original model name in sse output
 
-        # Hard switch: always override enable_thinking based on model name suffix
-        # Only enable thinking if model name ends with '-think'
         original_value = getattr(request, "enable_thinking", None)
         request.enable_thinking = _enable_think
         logger.debug(
@@ -249,7 +243,6 @@ def _check_and_handle_first_chunk(chunk: bytes) -> bool:
     """
     ignore_first_chunk = False
     try:
-        # Attempt to parse the chunk as JSON
         parser_chunk = chunk.lstrip(b"data:")
         if _ORJSON_AVAILABLE:
             chunk_data = orjson.loads(parser_chunk)
@@ -260,15 +253,12 @@ def _check_and_handle_first_chunk(chunk: bytes) -> bool:
             delta = choices[0].get("delta", {})
             content = delta.get("content")
             if content == "<think>":
-                # logger.debug("Ignoring first chunk containing '<think>'")
                 ignore_first_chunk = True
-    except (orjson.JSONDecodeError, json.JSONDecodeError) as e:
-        # Handle cases where the first chunk is not valid JSON
+    except (orjson.JSONDecodeError, json.JSONDecodeError):
         logger.warning(
             "Failed to decode first chunk as JSON. Proceeding without ignoring."
         )
     except Exception as e:
-        # Catch any other unexpected errors during processing
         logger.error(
             f"An unexpected error occurred while processing the first chunk: {e}"
         )
@@ -321,15 +311,10 @@ def _patch_api_serve_check_request(request):
             request.stream_options = stream_options
             logger.debug("Enabled stream_options.include_usage")
 
-    # logger.debug(f"Request before handling qwen3 thinking modes: {request.json()}")
     handle_qwen3_thinking_modes(request)
-    # logger.debug(f"Request after handling qwen3 thinking modes: {request.json()}")
 
-    # Set enable_thinking context based on CLI args and request
-    # This context will be isolated per request/async task
     enable_thinking_value = None
 
-    # Check if any thinking modes are enabled or user manually passed the value
     qwen3_chat_template_thinking = get_args_qwen3_enable_chat_template_thinking()
     qwen3_prompt_suffix_thinking = get_args_qwen3_enable_prompt_suffix_thinking()
     user_enable_thinking = getattr(request, "enable_thinking", None)
@@ -339,26 +324,22 @@ def _patch_api_serve_check_request(request):
         or qwen3_prompt_suffix_thinking
         or user_enable_thinking is not None
     ):
-        # Priority: user manual input > chat template thinking > prompt suffix thinking
         if user_enable_thinking is not None:
             enable_thinking_value = user_enable_thinking
             logger.debug(
                 f"Using user-provided enable_thinking: {enable_thinking_value}"
             )
         elif qwen3_chat_template_thinking:
-            # For chat template thinking, get the value from the request after processing
             enable_thinking_value = getattr(request, "enable_thinking", None)
             logger.debug(
                 f"Using chat template thinking enable_thinking: {enable_thinking_value}"
             )
         elif qwen3_prompt_suffix_thinking:
-            # For prompt suffix thinking, we assume thinking is enabled if any thinking mode is on
             enable_thinking_value = True
             logger.debug(
                 f"Using prompt suffix thinking enable_thinking: {enable_thinking_value}"
             )
 
-    # Set the context - this will be isolated per async task/request
     set_enable_thinking_context(enable_thinking_value)
     logger.debug(f"Final enable_thinking context set to: {enable_thinking_value}")
 
@@ -380,7 +361,7 @@ def _patch_api_server_add_parser(parser):
         "--qwen3-enable-thinking",
         action="store_true",
         default=False,
-        help="[DEPRECATED] Use --qwen3-enable-prompt-suffix-thinking instead. "
+        help="[DEPRECATED] This option is for backward compatibility. Its functionality is now fully aligned with --qwen3-enable-chat-template-thinking. "
         "Enable Qwen3 thinking mode. If not set, will check environment variable QWEN3_ENABLE_THINKING. Default: off. "
         "If model name is Qwen3-1.7B, thinking is off by default. If model name is Qwen3-1.7B-think, thinking is on.",
     )
@@ -471,14 +452,11 @@ def _patched_extract_reasoning_content(
     This function respects the request-specific context set by ContextVar,
     ensuring proper isolation between concurrent requests.
     """
-    # Check enable_thinking context - this is isolated per request
     enable_thinking = get_enable_thinking_context()
 
-    # If enable_thinking is explicitly False, return content only without reasoning
     if enable_thinking is False:
         return None, model_output
 
-    # Call original method for normal cases
     return self._origin_extract_reasoning_content(model_output, request, **kwargs)
 
 
@@ -525,7 +503,6 @@ def _patch_deepseek_r1_reasoning_parser():
                 DeepSeekR1ReasoningParser.extract_reasoning_content,
             )
 
-        # Apply patches
         DeepSeekR1ReasoningParser.extract_reasoning_content_streaming = (
             _patched_extract_reasoning_content_streaming
         )
@@ -558,18 +535,15 @@ def patch_all():
     except Exception as e:
         logger.warning(f"Failed to patch _SubParsersAction: {e}")
 
-    # Patch openai_api_serve
     openai_api_serve.check_request = _patch_api_serve_check_request
     logger.info("Successfully patched openai_api_serve.check_request")
 
     openai_api_serve.get_model_list = _patch_get_model_list
     logger.info("Successfully patched openai_api_serve.get_model_list")
 
-    # Patch ArgumentParser
     ArgumentParser.parse_args = _patch_parse_args
     logger.info("Successfully patched ArgumentParser.parse_args")
 
-    # Always apply the patch to remove the first chunk, the behavior is controlled by get_remove_first_think_chunk_status() at runtime
     try:
         if not hasattr(StreamingResponse, "_origin_stream_response"):
             setattr(
@@ -580,5 +554,4 @@ def patch_all():
     except Exception as e:
         logger.warning(f"Failed to patch StreamingResponse: {e}")
 
-    # Patch DeepSeekR1ReasoningParser to respect enable_thinking context
     _patch_deepseek_r1_reasoning_parser()
