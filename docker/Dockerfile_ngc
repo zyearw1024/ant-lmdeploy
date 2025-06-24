@@ -1,33 +1,32 @@
 ARG LMDEPLOY_VERSION=0.6.1.1
 
 # Stage 1: Build the WHL file
-FROM nvcr.io/nvidia/pytorch:25.03-py3 AS builder
+FROM nvcr.io/nvidia/pytorch:25.01-py3 AS builder
 
 # Ubuntu 24.04 including Python 3.12
-# NVIDIA CUDA 12.8.1.012
-# NVIDIA cuBLAS 12.8.4.1
-# NVIDIA cuBLASMp 0.4.0
-# NVIDIA cuDNN 9.8.0.87
+# NVIDIA CUDA 12.8.0.038
+# NVIDIA cuBLAS 12.8.3.14
+# NVIDIA cuDNN 9.7.0.66
 # NVIDIA NCCL 2.25.1
-# NVIDIA RAPIDS™ 25.02
+# NVIDIA RAPIDS™ 24.10
 # rdma-core 50.0
 # NVIDIA HPC-X 2.21
 # SHARP 3.9.0
 # UCC 1.4.0
-# UCX 1.18.0
+# OpenUCX 1.18.0
 # OpenMPI 4.1.7
 # GDRCopy 2.4.1
 # TensorBoard 2.16.2
-# Nsight Compute 2025.1.1.2
-# Nsight Systems 2025.1.1.110
-# NVIDIA TensorRT™ 10.9.0.34
-# Torch-TensorRT 2.7.0a0
-# NVIDIA DALI® 1.47
+# Nsight Compute 2025.1.0.14
+# Nsight Systems 2024.6.2.225
+# NVIDIA TensorRT™ 10.8.0.40
+# Torch-TensorRT 2.6.0a0
+# NVIDIA DALI® 1.45
 # nvImageCodec 0.2.0.7
 # MAGMA 2.6.2
-# JupyterLab 4.3.5 including Jupyter-TensorBoard
-# TransformerEngine 2.1
-# TensorRT Model Optimizer 0.23
+# JupyterLab 4.3.4 including Jupyter-TensorBoard
+# TransformerEngine 1.14
+# TensorRT Model Optimizer 0.21
 ARG LMDEPLOY_VERSION
 ENV LMDEPLOY_VERSION=${LMDEPLOY_VERSION}
 RUN echo "Stage 1 LMDEPLOY_VERSION: ${LMDEPLOY_VERSION}"
@@ -41,7 +40,8 @@ ENV WRITE_WHL="true"
 # Copy necessary files
 COPY ./../ /ant_lmdeploy
 COPY ./../builder/manywheel/entrypoint_build_ngc.sh /entrypoint_build.sh
-
+# COPY ./../requirements/ngc-build.txt /tmp/requirements-ngc-build.txt
+# RUN pip3 install --no-cache-dir -r /tmp/requirements-ngc-build.txt --index-url https://pypi.tuna.tsinghua.edu.cn/simple
 # Build the WHL file
 RUN sh /entrypoint_build.sh
 
@@ -60,7 +60,7 @@ FROM scratch AS exporter
 COPY --from=builder /lmdeploy_build/*.whl .
 
 # Stage 3: Create the final image
-FROM nvcr.io/nvidia/pytorch:25.03-py3
+FROM nvcr.io/nvidia/pytorch:25.01-py3
 
 ARG LMDEPLOY_VERSION
 ENV LMDEPLOY_VERSION=${LMDEPLOY_VERSION}
