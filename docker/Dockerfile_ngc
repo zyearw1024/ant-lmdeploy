@@ -1,28 +1,33 @@
 ARG LMDEPLOY_VERSION=0.6.1.1
 
 # Stage 1: Build the WHL file
-FROM nvcr.io/nvidia/pytorch:24.02-py3 AS builder
+FROM nvcr.io/nvidia/pytorch:25.03-py3 AS builder
 
-# Ubuntu 22.04 including Python 3.10
-# NVIDIA CUDA 12.3.2
-# NVIDIA cuBLAS 12.3.4.1
-# NVIDIA cuDNN 9.0.0.306
-# NVIDIA NCCL 2.19.4
-# NVIDIA RAPIDS™ 23.12
-# rdma-core 39.0
-# NVIDIA HPC-X 2.16rc4
-# OpenMPI 4.1.4+
-# GDRCopy 2.3
-# TensorBoard 2.9.0
-# Nsight Compute 2023.3.1.1
-# Nsight Systems 2023.4.1.97
-# NVIDIA TensorRT™ 8.6.3
-# Torch-TensorRT 2.2.0a0
-# NVIDIA DALI® 1.34
+# Ubuntu 24.04 including Python 3.12
+# NVIDIA CUDA 12.8.1.012
+# NVIDIA cuBLAS 12.8.4.1
+# NVIDIA cuBLASMp 0.4.0
+# NVIDIA cuDNN 9.8.0.87
+# NVIDIA NCCL 2.25.1
+# NVIDIA RAPIDS™ 25.02
+# rdma-core 50.0
+# NVIDIA HPC-X 2.21
+# SHARP 3.9.0
+# UCC 1.4.0
+# UCX 1.18.0
+# OpenMPI 4.1.7
+# GDRCopy 2.4.1
+# TensorBoard 2.16.2
+# Nsight Compute 2025.1.1.2
+# Nsight Systems 2025.1.1.110
+# NVIDIA TensorRT™ 10.9.0.34
+# Torch-TensorRT 2.7.0a0
+# NVIDIA DALI® 1.47
+# nvImageCodec 0.2.0.7
 # MAGMA 2.6.2
-# JupyterLab 2.3.2 including Jupyter-TensorBoard
-# TransformerEngine 1.3
-# PyTorch quantization wheel 2.1.2
+# JupyterLab 4.3.5 including Jupyter-TensorBoard
+# TransformerEngine 2.1
+# TensorRT Model Optimizer 0.23
 ARG LMDEPLOY_VERSION
 ENV LMDEPLOY_VERSION=${LMDEPLOY_VERSION}
 RUN echo "Stage 1 LMDEPLOY_VERSION: ${LMDEPLOY_VERSION}"
@@ -55,7 +60,7 @@ FROM scratch AS exporter
 COPY --from=builder /lmdeploy_build/*.whl .
 
 # Stage 3: Create the final image
-FROM nvcr.io/nvidia/pytorch:24.02-py3
+FROM nvcr.io/nvidia/pytorch:25.03-py3
 
 ARG LMDEPLOY_VERSION
 ENV LMDEPLOY_VERSION=${LMDEPLOY_VERSION}
@@ -98,4 +103,4 @@ WORKDIR /workspace
 
 # Step 3: Build the final image
 # This step builds the complete image, including installing the WHL file
-# time DOCKER_BUILDKIT=1 docker build --progress=plain --platform linux/amd64 -t ant_lmdeploy:v0.9.0.1_cu123_$(date +"%Y%m%d") --build-arg LMDEPLOY_VERSION=0.9.0.1 -f Dockerfile_ngc ..
+# time DOCKER_BUILDKIT=1 docker build --progress=plain --platform linux/amd64 -t ant_lmdeploy:v0.9.0.1_cu128_$(date +"%Y%m%d") --build-arg LMDEPLOY_VERSION=0.9.0.1 -f Dockerfile_ngc ..
